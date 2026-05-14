@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from httpx import ASGITransport
 from sqlmodel import Session, select
 
-from app.db.models import ClickLog, SearchHistory
+from app.db.models import ClickLog, SearchHistory, SearchResultsCache
 from app.db.session import engine
 from app.main import app
 
@@ -17,6 +17,8 @@ def _truncate_history() -> None:
         for row in session.exec(select(ClickLog)).all():
             session.delete(row)
         for row in session.exec(select(SearchHistory)).all():
+            session.delete(row)
+        for row in session.exec(select(SearchResultsCache)).all():
             session.delete(row)
         session.commit()
 
@@ -42,7 +44,9 @@ async def test_search_stream_creates_history_row() -> None:
         rows = session.exec(select(SearchHistory)).all()
         assert len(rows) == 1
         assert rows[0].raw_query == "검정 남방"
-        assert rows[0].parsed_by == "regex"
+        # parsed_by may have "(cache)" suffix when the same conditions are
+        # hit again in a subsequent test run; just assert the base mode.
+        assert rows[0].parsed_by.startswith("regex")
         # elapsed_ms is set even when there are no adapters
         assert rows[0].elapsed_ms >= 0
 

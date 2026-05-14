@@ -22,17 +22,19 @@ from httpx import ASGITransport
 from sqlmodel import Session, select
 
 from app.adapters.naver import NAVER_SEARCH_URL
-from app.db.models import ClickLog, SearchHistory, Shop
+from app.db.models import ClickLog, SearchHistory, SearchResultsCache, Shop
 from app.db.session import engine
 from app.main import app
 
 
 def _reset_state() -> None:
-    """Truncate history-related rows and ensure only naver is enabled."""
+    """Truncate history/cache and ensure only naver is enabled."""
     with Session(engine) as session:
         for row in session.exec(select(ClickLog)).all():
             session.delete(row)
         for row in session.exec(select(SearchHistory)).all():
+            session.delete(row)
+        for row in session.exec(select(SearchResultsCache)).all():
             session.delete(row)
         for shop in session.exec(select(Shop)).all():
             shop.enabled = shop.slug == "naver"
