@@ -65,14 +65,16 @@ def test_FR2_regex_parser_extracts_all_dimensions_via_parse_endpoint() -> None:
         r = client.post("/parse", data={"q": PRD_QUERY})
         assert r.status_code == 200
         body = r.text
-        assert "검정" in body
-        assert "100" in body
+        assert 'value="검정"' in body
+        assert 'value="100"' in body
         assert "남방" in body  # category includes 긴팔 prefix
         assert "긴팔" in body
         assert "폴리에스테르" in body
-        assert "80%" in body
+        # material_pct = 80 surfaces in the input value
+        assert 'value="80"' in body
         assert "루즈핏" in body
-        assert "20,000원" in body
+        # max_price 20000 is the raw int value in the editable input
+        assert "20000" in body
         # FR-10: parsing path tagged regex (no LLM configured)
         assert "regex" in body
 

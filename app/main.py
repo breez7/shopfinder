@@ -103,16 +103,43 @@ def create_app() -> FastAPI:
     @app.post("/parse", response_class=HTMLResponse)
     async def parse_query(request: Request, q: str = Form(default="")) -> HTMLResponse:
         conditions, parsed_by = await parse_with_llm(q)
+        payload = _parsed_panel_payload(conditions, parsed_by)
+        payload["original_json"] = conditions.model_dump_json()
         return templates.TemplateResponse(
-            request,
-            "partials/parsed_fields.html",
-            _parsed_panel_payload(conditions, parsed_by),
+            request, "partials/parsed_fields.html", payload
         )
 
     @app.get("/search/stream")
-    async def search_stream(request: Request, q: str = "", refresh: int = 0):
-        # Try LLM parser first; it falls back to regex on any failure.
-        conditions, parsed_by = await parse_with_llm(q)
+    async def search_stream(
+        request: Request,
+        q: str = "",
+        refresh: int = 0,
+        category: str = "",
+        color: str = "",
+        size: str = "",
+        material: str = "",
+        material_pct: int | None = None,
+        fit: str = "",
+        max_price: int | None = None,
+        free_text: str = "",
+        use_edits: int = 0,
+    ):
+        if use_edits == 1:
+            # Skip the parser entirely; user edited the conditions in the panel.
+            conditions = ParsedConditions(
+                category=category or None,
+                color=color or None,
+                size=size or None,
+                material=material or None,
+                material_pct=material_pct,
+                fit=fit or None,
+                max_price=max_price,
+                free_text=free_text,
+            )
+            parsed_by = "edited"
+        else:
+            # Try LLM parser first; it falls back to regex on any failure.
+            conditions, parsed_by = await parse_with_llm(q)
         cache_hit = False
         cached_results: list[SearchResult] = []
         if q.strip() and refresh != 1:

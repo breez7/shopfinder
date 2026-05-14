@@ -106,6 +106,16 @@ code {
     margin-bottom: 0.4rem;
 }
 
+.parsed-form { display: flex; flex-direction: column; gap: 0.5rem; }
+.parsed-form .parsed-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.4rem; }
+.parsed-form label { display: flex; flex-direction: column; font-size: 0.78rem; color: var(--muted); gap: 0.15rem; }
+.parsed-form label.full { width: 100%; }
+.parsed-form input { padding: 0.35rem 0.5rem; font-size: 0.9rem; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--fg); }
+.parsed-actions { display: flex; gap: 0.5rem; margin-top: 0.3rem; }
+.parsed-actions button { padding: 0.45rem 0.85rem; border: none; border-radius: 6px; font-size: 0.9rem; cursor: pointer; }
+#apply-edits { background: var(--accent); color: #fff; }
+.btn-secondary { background: #eef1f4; color: var(--fg); }
+
 .chip {
     background: var(--chip-bg);
     color: var(--chip-fg);

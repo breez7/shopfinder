@@ -121,6 +121,84 @@
         fd.append('q', q);
         const res = await fetch('/parse', { method: 'POST', body: fd });
         parsedPanel.innerHTML = await res.text();
+        bindParsedFormHandlers();
+    }
+
+    function bindParsedFormHandlers() {
+        const form = parsedPanel.querySelector('#parsed-form');
+        if (!form) return;
+        const applyBtn = form.querySelector('#apply-edits');
+        const resetBtn = form.querySelector('#reset-edits');
+        if (applyBtn) {
+            applyBtn.addEventListener('click', () => {
+                const params = new URLSearchParams();
+                const q = input.value.trim();
+                if (q) params.set('q', q);
+                params.set('use_edits', '1');
+                ['category','color','size','material','material_pct','fit','max_price','free_text'].forEach(name => {
+                    const el = form.querySelector('[name="'+name+'"]');
+                    if (el && el.value) params.set(name, el.value);
+                });
+                startSearchRaw(params.toString());
+            });
+        }
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                let original = {};
+                try { original = JSON.parse(form.dataset.original || '{}'); } catch (_) {}
+                ['category','color','size','material','material_pct','fit','max_price','free_text'].forEach(name => {
+                    const el = form.querySelector('[name="'+name+'"]');
+                    if (el) el.value = original[name] == null ? '' : original[name];
+                });
+            });
+        }
+    }
+
+    function startSearchRaw(qs) {
+        if (currentSource) currentSource.close();
+        grid.innerHTML = '';
+        shopStatus.innerHTML = '';
+        shopToggles.innerHTML = '';
+        shopsSeen.clear();
+        disabledShops.clear();
+        resultCount.textContent = '0';
+        const es = new EventSource('/search/stream?' + qs);
+        currentSource = es;
+        currentHistoryId = null;
+        let count = 0;
+        es.addEventListener('meta', e => {
+            try { currentHistoryId = JSON.parse(e.data).history_id; } catch (_) {}
+        });
+        es.addEventListener('shop_started', e => { const d = JSON.parse(e.data); resetStatusForSlug(d.slug, 'shop_started'); });
+        es.addEventListener('shop_completed', e => { const d = JSON.parse(e.data); resetStatusForSlug(d.slug, 'shop_completed'); });
+        es.addEventListener('shop_failed', e => { const d = JSON.parse(e.data); resetStatusForSlug(d.slug, 'shop_failed', d.message); });
+        es.addEventListener('result', e => {
+            grid.insertAdjacentHTML('beforeend', e.data);
+            count += 1;
+            resultCount.textContent = String(count);
+            const lastCard = grid.lastElementChild;
+            if (lastCard && lastCard.dataset && lastCard.dataset.shop) ensureShopToggle(lastCard.dataset.shop);
+            applyFiltersAndSort();
+        });
+        es.addEventListener('score_update', e => {
+            try {
+                const d = JSON.parse(e.data);
+                if (!d.product_url) return;
+                const card = grid.querySelector('[data-product-url="' + cssEscape(d.product_url) + '"]');
+                if (!card) return;
+                if (typeof d.score === 'number') card.dataset.matchScore = String(d.score);
+                let reasonNode = card.querySelector('.matched-reason');
+                if (!reasonNode) {
+                    reasonNode = document.createElement('div');
+                    reasonNode.className = 'matched-reason';
+                    card.querySelector('.result-body').appendChild(reasonNode);
+                }
+                if (d.reason) reasonNode.textContent = d.reason;
+                applyFiltersAndSort();
+            } catch (_) {}
+        });
+        es.addEventListener('done', () => { es.close(); currentSource = null; });
+        es.onerror = () => { es.close(); currentSource = null; };
     }
 
     function startSearch(q, forceRefresh) {
