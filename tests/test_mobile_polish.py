@@ -36,5 +36,9 @@ def test_tap_targets_at_least_44px_on_mobile() -> None:
 
 def test_search_form_has_max_width_on_desktop() -> None:
     body = _css()
-    # main container is constrained
-    assert "max-width: 1100px" in body
+    # main container is constrained — width can shift between redesigns
+    import re
+
+    match = re.search(r"main\s*{[^}]*max-width:\s*(\d+)px", body)
+    assert match, "main { max-width: ... } not found"
+    assert int(match.group(1)) >= 900

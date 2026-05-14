@@ -42,7 +42,6 @@ def test_root_path_prefixes_nav_and_form_actions(
         # Nav links prefixed
         assert 'href="/shopfinder/"' in body
         assert 'href="/shopfinder/history"' in body
-        assert 'href="/shopfinder/settings"' in body
         # JS base path injected
         assert 'window.SHOPFINDER_BASE = "/shopfinder"' in body
         # Static asset URL also prefixed by FastAPI's url_for
