@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}쇼핑몰 관리 · ShopFinder{% endblock %}
+{% block content %}
+<section class="admin-shops">
+    <h1>쇼핑몰 관리</h1>
+
+    <table class="shops-table">
+        <thead>
+            <tr>
+                <th>슬러그</th>
+                <th>이름</th>
+                <th>활성</th>
+                <th>어댑터</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for shop in shops %}
+            <tr>
+                <td><code>{{ shop.slug }}</code>{% if is_builtin(shop.slug) %} <small>(기본)</small>{% endif %}</td>
+                <td>{{ shop.name }}</td>
+                <td>
+                    <form action="/admin/shops/{{ shop.slug }}/toggle" method="post" hx-post="/admin/shops/{{ shop.slug }}/toggle" hx-swap="none">
+                        <button type="submit" class="btn-small">{{ "활성" if shop.enabled else "비활성" }}</button>
+                    </form>
+                </td>
+                <td><code>{{ shop.adapter_module }}</code></td>
+                <td>
+                    {% if not is_builtin(shop.slug) %}
+                    <form action="/admin/shops/{{ shop.slug }}/delete" method="post" hx-post="/admin/shops/{{ shop.slug }}/delete" hx-confirm="삭제할까요?" hx-target="closest tr" hx-swap="outerHTML">
+                        <button type="submit" class="btn-danger btn-small">삭제</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>새 쇼핑몰 추가 (YAML/JSON)</h2>
+    <form action="/admin/shops/add" method="post" hx-post="/admin/shops/add" hx-target="#add-msg" hx-swap="innerHTML">
+        <div class="form-row">
+            <label>슬러그
+                <input type="text" name="slug" placeholder="my-custom-shop" required>
+            </label>
+            <label>표시 이름
+                <input type="text" name="name" placeholder="My Custom Shop" required>
+            </label>
+        </div>
+        <label>설정 (YAML 또는 JSON)
+            <textarea name="config" rows="10" required>search_url_template: "https://example.com/search?q={keyword}"
+card_selector: "li.product"
+title_selector: ".title"
+price_selector: ".price"
+link_selector: "a"
+image_selector: "img"
+specs_selector: ""</textarea>
+        </label>
+        <p class="hint muted-small">
+            <code>search_url_template</code>은 <code>{keyword}</code> 자리표시자를 포함해야 합니다.
+            나머지 셀렉터는 CSS 셀렉터.
+        </p>
+        <button type="submit">추가</button>
+    </form>
+    <p id="add-msg" class="hint"></p>
+</section>
+{% endblock %}

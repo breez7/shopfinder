@@ -25,6 +25,14 @@ from app.llm.match_scorer import score_batch
 from app.llm.query_optimizer import optimize as optimize_keyword
 from app.llm.regex_parser import parse as regex_parse
 from app.search import run_search
+from app.shops_admin import (
+    add_yaml_shop,
+    delete_shop,
+    is_builtin as shop_is_builtin,
+    list_shops as list_shops_admin,
+    toggle_enabled as toggle_shop_enabled,
+    update_yaml_shop_config,
+)
 from app.settings_store import (
     KEY_LLM_API_KEY,
     KEY_LLM_BASE_URL,
@@ -324,7 +332,78 @@ def create_app() -> FastAPI:
         color = "#2ea44f" if ok else "#cf222e"
         return HTMLResponse(f"<span style='color:{color}'>{msg}</span>")
 
+    @app.get("/admin/shops", response_class=HTMLResponse)
+    def admin_shops_page(
+        request: Request, session: Session = Depends(get_session)
+    ) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request,
+            "admin/shops.html",
+            {"shops": list_shops_admin(session), "is_builtin": shop_is_builtin},
+        )
+
+    @app.post("/admin/shops/{slug}/toggle")
+    def admin_shops_toggle(slug: str, session: Session = Depends(get_session)):
+        shop = next((s for s in list_shops_admin(session) if s.slug == slug), None)
+        if shop is None:
+            raise HTTPException(status_code=404, detail="shop not found")
+        toggle_shop_enabled(session, slug, not shop.enabled)
+        return JSONResponse({"ok": True})
+
+    @app.post("/admin/shops/add", response_class=HTMLResponse)
+    def admin_shops_add(
+        slug: str = Form(...),
+        name: str = Form(...),
+        config: str = Form(...),
+        session: Session = Depends(get_session),
+    ) -> HTMLResponse:
+        # Accept either JSON or YAML-ish line-by-line k:v body
+        cfg = _parse_admin_config(config)
+        if isinstance(cfg, str):
+            return HTMLResponse(f"<span style='color:#cf222e'>{cfg}</span>")
+        _, errors = add_yaml_shop(session, slug=slug, name=name, config=cfg)
+        if errors:
+            return HTMLResponse(
+                "<span style='color:#cf222e'>" + "; ".join(errors) + "</span>"
+            )
+        return HTMLResponse("<span style='color:#2ea44f'>추가됨 — 새로고침하세요</span>")
+
+    @app.post("/admin/shops/{slug}/delete", response_class=HTMLResponse)
+    def admin_shops_delete(
+        slug: str, session: Session = Depends(get_session)
+    ) -> HTMLResponse:
+        ok, err = delete_shop(session, slug)
+        if not ok:
+            raise HTTPException(status_code=400, detail=err or "delete failed")
+        return HTMLResponse("")
+
     return app
+
+
+def _parse_admin_config(blob: str) -> dict | str:
+    """Accept a JSON object OR a simple YAML-ish 'key: value' line set."""
+    text = blob.strip()
+    if not text:
+        return "config is empty"
+    if text.startswith("{"):
+        try:
+            data = json.loads(text)
+            return data if isinstance(data, dict) else "config must be a JSON object"
+        except json.JSONDecodeError as exc:
+            return f"invalid JSON: {exc}"
+    # Hand-rolled mini YAML: lines like 'key: "value"' or 'key: value'
+    result: dict[str, str] = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" not in line:
+            return f"invalid line (no colon): {line}"
+        key, _, value = line.partition(":")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        result[key] = value
+    return result
 
 
 app = create_app()
