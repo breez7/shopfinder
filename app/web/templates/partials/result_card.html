@@ -1,4 +1,8 @@
-<article class="result-card" data-shop="{{ r.shop_slug }}" data-product-url="{{ r.product_url }}">
+<article class="result-card"
+         data-shop="{{ r.shop_slug }}"
+         data-product-url="{{ r.product_url }}"
+         data-price="{{ r.price or '' }}"
+         data-match-score="{{ r.match_score or '' }}">
     {% if r.image_url %}<img class="result-img" src="{{ r.image_url }}" alt="" loading="lazy">{% endif %}
     <div class="result-body">
         <a class="result-title" href="{{ r.product_url }}" target="_blank" rel="noopener noreferrer">{{ r.title }}</a>

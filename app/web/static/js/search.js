@@ -7,19 +7,40 @@
     const shopStatus = document.getElementById('shop-status');
     const grid = document.getElementById('result-grid');
     const resultCount = document.getElementById('result-count');
+    const sortMode = document.getElementById('sort-mode');
+    const maxPriceFilter = document.getElementById('max-price-filter');
+    const shopToggles = document.getElementById('shop-toggles');
 
     if (!form) return;
 
-    function resetStatusForSlug(slug, kind, message) {
-        let chip = shopStatus.querySelector('[data-shop="' + slug + '"]');
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = renderStatus(slug, kind, message);
-        const newChip = wrapper.firstElementChild;
-        if (chip) {
-            chip.replaceWith(newChip);
-        } else {
-            shopStatus.appendChild(newChip);
-        }
+    const shopsSeen = new Set();
+    const disabledShops = new Set();
+
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+    }
+    function cssEscape(s) {
+        return String(s).replace(/(["\\\[\]])/g, '\\$1');
+    }
+
+    function ensureShopToggle(slug) {
+        if (shopsSeen.has(slug)) return;
+        shopsSeen.add(slug);
+        const lbl = document.createElement('label');
+        lbl.className = 'shop-toggle';
+        lbl.dataset.shop = slug;
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = true;
+        cb.addEventListener('change', () => {
+            if (cb.checked) disabledShops.delete(slug); else disabledShops.add(slug);
+            applyFiltersAndSort();
+        });
+        lbl.appendChild(cb);
+        lbl.appendChild(document.createTextNode(' ' + slug));
+        shopToggles.appendChild(lbl);
     }
 
     function renderStatus(slug, kind, message) {
@@ -30,16 +51,69 @@
         return '<span class="shop-status shop-status-' + kind + '" data-shop="' + slug + '">' +
                escapeHtml(slug) + ': ' + label + suffix + '</span>';
     }
-
-    function escapeHtml(s) {
-        return String(s).replace(/[&<>"']/g, c => ({
-            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-        }[c]));
+    function resetStatusForSlug(slug, kind, message) {
+        ensureShopToggle(slug);
+        let chip = shopStatus.querySelector('[data-shop="' + cssEscape(slug) + '"]');
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = renderStatus(slug, kind, message);
+        const newChip = wrapper.firstElementChild;
+        if (chip) chip.replaceWith(newChip); else shopStatus.appendChild(newChip);
     }
 
-    function cssEscape(s) {
-        // Minimal CSS attribute-selector escape for product URLs containing quotes / brackets
-        return String(s).replace(/(["\\\[\]])/g, '\\$1');
+    function clearGroupHeaders() {
+        grid.querySelectorAll('.is-group-header').forEach(n => n.remove());
+    }
+
+    function applyFiltersAndSort() {
+        clearGroupHeaders();
+        const cards = Array.from(grid.querySelectorAll('.result-card'));
+        const maxPrice = parseInt(maxPriceFilter.value || '0', 10);
+        const mode = sortMode.value;
+
+        // Filter visibility
+        for (const card of cards) {
+            const slug = card.dataset.shop;
+            const price = parseInt(card.dataset.price || '0', 10);
+            const hideShop = disabledShops.has(slug);
+            const hidePrice = maxPrice > 0 && price > 0 && price > maxPrice;
+            card.classList.toggle('is-hidden', hideShop || hidePrice);
+        }
+
+        // Sort
+        function priceKey(card) {
+            const p = parseInt(card.dataset.price || '0', 10);
+            return p || (mode === 'price_asc' ? Number.MAX_SAFE_INTEGER : -1);
+        }
+        function scoreKey(card) {
+            const s = parseFloat(card.dataset.matchScore || '');
+            return Number.isFinite(s) ? s : -1;
+        }
+        let sortFn;
+        if (mode === 'price_asc') sortFn = (a, b) => priceKey(a) - priceKey(b);
+        else if (mode === 'price_desc') sortFn = (a, b) => priceKey(b) - priceKey(a);
+        else if (mode === 'score_desc') sortFn = (a, b) => scoreKey(b) - scoreKey(a);
+        else if (mode === 'shop') sortFn = (a, b) => {
+            const cmp = (a.dataset.shop || '').localeCompare(b.dataset.shop || '');
+            return cmp !== 0 ? cmp : priceKey(a) - priceKey(b);
+        };
+        cards.sort(sortFn);
+
+        // Reattach in sorted order. For 'shop' mode, insert group-header rows
+        if (mode === 'shop') {
+            let lastShop = null;
+            for (const card of cards) {
+                if (card.dataset.shop !== lastShop) {
+                    lastShop = card.dataset.shop;
+                    const hdr = document.createElement('div');
+                    hdr.className = 'result-card is-group-header';
+                    hdr.textContent = lastShop;
+                    grid.appendChild(hdr);
+                }
+                grid.appendChild(card);
+            }
+        } else {
+            for (const card of cards) grid.appendChild(card);
+        }
     }
 
     async function refreshParsedPanel(q) {
@@ -53,6 +127,9 @@
         if (currentSource) currentSource.close();
         grid.innerHTML = '';
         shopStatus.innerHTML = '';
+        shopToggles.innerHTML = '';
+        shopsSeen.clear();
+        disabledShops.clear();
         resultCount.textContent = '0';
         if (!q.trim()) return;
 
@@ -85,6 +162,11 @@
             grid.insertAdjacentHTML('beforeend', e.data);
             count += 1;
             resultCount.textContent = String(count);
+            const lastCard = grid.lastElementChild;
+            if (lastCard && lastCard.dataset && lastCard.dataset.shop) {
+                ensureShopToggle(lastCard.dataset.shop);
+            }
+            applyFiltersAndSort();
         });
         es.addEventListener('score_update', e => {
             try {
@@ -92,6 +174,9 @@
                 if (!d.product_url) return;
                 const card = grid.querySelector('[data-product-url="' + cssEscape(d.product_url) + '"]');
                 if (!card) return;
+                if (typeof d.score === 'number') {
+                    card.dataset.matchScore = String(d.score);
+                }
                 let reasonNode = card.querySelector('.matched-reason');
                 if (!reasonNode) {
                     reasonNode = document.createElement('div');
@@ -99,9 +184,7 @@
                     card.querySelector('.result-body').appendChild(reasonNode);
                 }
                 if (d.reason) reasonNode.textContent = d.reason;
-                if (typeof d.score === 'number') {
-                    card.dataset.matchScore = String(d.score);
-                }
+                applyFiltersAndSort();
             } catch (_) { /* ignore */ }
         });
         es.addEventListener('done', () => {
@@ -130,8 +213,11 @@
         });
     }
 
+    sortMode.addEventListener('change', applyFiltersAndSort);
+    maxPriceFilter.addEventListener('input', applyFiltersAndSort);
+
     // Delegate click logging on result cards
-    let _clickDebounce = new Map();
+    const _clickDebounce = new Map();
     grid.addEventListener('click', ev => {
         const anchor = ev.target.closest('a.result-title');
         if (!anchor) return;
@@ -150,9 +236,7 @@
         navigator.sendBeacon ? navigator.sendBeacon('/click', fd) : fetch('/click', { method: 'POST', body: fd, keepalive: true });
     });
 
-    // Auto-search if we landed with ?q=...
     if (input.value.trim()) {
-        // Defer so the dom is fully ready
         setTimeout(() => form.dispatchEvent(new Event('submit')), 50);
     }
 

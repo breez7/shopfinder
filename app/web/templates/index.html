@@ -29,6 +29,22 @@
             <div id="shop-status" class="shop-status-list"></div>
             <span class="results-count"><span id="result-count">0</span>개 결과</span>
         </header>
+        <div class="results-controls">
+            <label class="control">
+                정렬:
+                <select id="sort-mode">
+                    <option value="price_asc">가격 낮은 순</option>
+                    <option value="price_desc">가격 높은 순</option>
+                    <option value="score_desc">매칭 점수 순</option>
+                    <option value="shop">쇼핑몰별</option>
+                </select>
+            </label>
+            <label class="control">
+                최대 가격:
+                <input type="number" id="max-price-filter" min="0" step="1000" placeholder="(전체)">
+            </label>
+            <div id="shop-toggles" class="shop-toggles"></div>
+        </div>
         <div id="result-grid" class="result-grid"></div>
     </section>
 </section>

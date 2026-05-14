@@ -189,11 +189,45 @@ code {
 .shop-status-shop_failed { background: #fde2e3; color: #7a1d22; }
 .results-count { color: var(--muted); font-size: 0.85rem; }
 
+.results-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+    align-items: center;
+    margin-bottom: 0.7rem;
+}
+.results-controls .control {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.88rem;
+    color: var(--muted);
+}
+.results-controls select, .results-controls input[type="number"] {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card);
+}
+.shop-toggles { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.shop-toggle {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    font-size: 0.85rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    background: #eef1f4;
+    cursor: pointer;
+}
+.shop-toggle input { margin: 0; }
+
 .result-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 0.75rem;
 }
+.result-card.is-hidden { display: none !important; }
+.result-card.is-group-header { grid-column: 1 / -1; background: transparent; border: none; padding: 0.35rem 0; font-weight: 700; color: var(--muted); }
 
 .result-card {
     background: var(--card);
