@@ -13,10 +13,13 @@ from sqlmodel import Session, desc, select
 from sse_starlette.sse import EventSourceResponse
 
 from app.adapters.registry import load_enabled_adapters
-from app.adapters.types import ParsedConditions
+from app.adapters.types import ParsedConditions, SearchResult
 from app.db.models import ClickLog, SearchHistory
 from app.db.session import engine, get_session, init_db
 from app.llm.client import connection_test as llm_connection_test
+from app.llm.llm_parser import parse_with_llm
+from app.llm.match_scorer import score_batch
+from app.llm.query_optimizer import optimize as optimize_keyword
 from app.llm.regex_parser import parse as regex_parse
 from app.search import run_search
 from app.settings_store import (
@@ -87,17 +90,18 @@ def create_app() -> FastAPI:
         )
 
     @app.post("/parse", response_class=HTMLResponse)
-    def parse_query(request: Request, q: str = Form(default="")) -> HTMLResponse:
-        conditions = regex_parse(q)
+    async def parse_query(request: Request, q: str = Form(default="")) -> HTMLResponse:
+        conditions, parsed_by = await parse_with_llm(q)
         return templates.TemplateResponse(
             request,
             "partials/parsed_fields.html",
-            _parsed_panel_payload(conditions, "regex"),
+            _parsed_panel_payload(conditions, parsed_by),
         )
 
     @app.get("/search/stream")
     async def search_stream(request: Request, q: str = ""):
-        conditions = regex_parse(q)
+        # Try LLM parser first; it falls back to regex on any failure.
+        conditions, parsed_by = await parse_with_llm(q)
 
         # Persist search_history row up front so click logs can reference it.
         history_row: SearchHistory | None = None
@@ -106,36 +110,46 @@ def create_app() -> FastAPI:
                 history_row = SearchHistory(
                     raw_query=q,
                     parsed_conditions_json=conditions.model_dump_json(),
-                    parsed_by="regex",
+                    parsed_by=parsed_by,
                 )
                 session.add(history_row)
                 session.commit()
                 session.refresh(history_row)
 
-        # Load adapters in a separate short-lived session (the stream lifetime is
-        # longer than a normal request, so we don't want to hold the connection).
         with Session(engine) as session:
             adapters = load_enabled_adapters(session)
         card_template = templates.get_template("partials/result_card.html")
 
+        # LLM query optimizer (#17) — best-effort, no-op when LLM unconfigured.
+        per_shop_keyword: dict[str, str] = {}
+        for a in adapters:
+            try:
+                per_shop_keyword[a.slug] = await optimize_keyword(conditions, a.slug)
+            except Exception:  # noqa: BLE001
+                per_shop_keyword[a.slug] = conditions.keyword()
+
         async def event_stream():
             t0 = time.monotonic()
-            total_results = 0
+            collected: list[SearchResult] = []
             try:
-                # Send a meta event first so the client can record the history_id.
                 yield {
                     "event": "meta",
                     "data": json.dumps(
-                        {"history_id": history_row.id if history_row else None},
+                        {
+                            "history_id": history_row.id if history_row else None,
+                            "parsed_by": parsed_by,
+                        },
                         ensure_ascii=False,
                     ),
                 }
 
-                async for event in run_search(conditions, adapters):
+                async for event in run_search(
+                    conditions, adapters, per_shop_keyword=per_shop_keyword
+                ):
                     if await request.is_disconnected():
                         break
                     if event.kind == "result" and event.result is not None:
-                        total_results += 1
+                        collected.append(event.result)
                         data = card_template.render(r=event.result)
                         yield {"event": "result", "data": data}
                     elif event.kind in ("shop_started", "shop_completed", "shop_failed"):
@@ -145,6 +159,27 @@ def create_app() -> FastAPI:
                             "data": json.dumps(payload, ensure_ascii=False),
                         }
                     elif event.kind == "done":
+                        # Score collected results in batches (#18/#19), then emit
+                        # score_update events that the client uses to enrich cards.
+                        if collected:
+                            try:
+                                scored = await score_batch(conditions, collected)
+                            except Exception:  # noqa: BLE001
+                                scored = collected
+                            for item in scored:
+                                if item.match_score is None and item.matched_reason is None:
+                                    continue
+                                yield {
+                                    "event": "score_update",
+                                    "data": json.dumps(
+                                        {
+                                            "product_url": item.product_url,
+                                            "score": item.match_score,
+                                            "reason": item.matched_reason,
+                                        },
+                                        ensure_ascii=False,
+                                    ),
+                                }
                         yield {"event": "done", "data": ""}
             finally:
                 if history_row is not None:
@@ -152,7 +187,7 @@ def create_app() -> FastAPI:
                     with Session(engine) as session:
                         row = session.get(SearchHistory, history_row.id)
                         if row is not None:
-                            row.total_results = total_results
+                            row.total_results = len(collected)
                             row.elapsed_ms = elapsed_ms
                             session.add(row)
                             session.commit()

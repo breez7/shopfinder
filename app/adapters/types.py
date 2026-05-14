@@ -16,9 +16,14 @@ class ParsedConditions(BaseModel):
     fit: Optional[str] = None
     max_price: Optional[int] = None
     free_text: str = ""
+    # Set by the LLM query optimizer (#17). When present, adapters use this
+    # verbatim instead of the naive concat.
+    keyword_override: Optional[str] = None
 
     def keyword(self) -> str:
-        """Naive keyword built by concatenating known fields. Adapters may override."""
+        """Keyword for the adapter's search URL. Honors LLM optimizer override."""
+        if self.keyword_override:
+            return self.keyword_override
         parts: list[str] = []
         for value in (self.color, self.size, self.category, self.fit, self.material):
             if value:

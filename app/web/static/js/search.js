@@ -37,6 +37,11 @@
         }[c]));
     }
 
+    function cssEscape(s) {
+        // Minimal CSS attribute-selector escape for product URLs containing quotes / brackets
+        return String(s).replace(/(["\\\[\]])/g, '\\$1');
+    }
+
     async function refreshParsedPanel(q) {
         const fd = new FormData();
         fd.append('q', q);
@@ -79,6 +84,24 @@
             grid.insertAdjacentHTML('beforeend', e.data);
             count += 1;
             resultCount.textContent = String(count);
+        });
+        es.addEventListener('score_update', e => {
+            try {
+                const d = JSON.parse(e.data);
+                if (!d.product_url) return;
+                const card = grid.querySelector('[data-product-url="' + cssEscape(d.product_url) + '"]');
+                if (!card) return;
+                let reasonNode = card.querySelector('.matched-reason');
+                if (!reasonNode) {
+                    reasonNode = document.createElement('div');
+                    reasonNode.className = 'matched-reason';
+                    card.querySelector('.result-body').appendChild(reasonNode);
+                }
+                if (d.reason) reasonNode.textContent = d.reason;
+                if (typeof d.score === 'number') {
+                    card.dataset.matchScore = String(d.score);
+                }
+            } catch (_) { /* ignore */ }
         });
         es.addEventListener('done', () => {
             es.close();
