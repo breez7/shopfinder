@@ -1,0 +1,14 @@
+{% if parsed_empty %}
+<p class="hint muted-small">파싱된 조건이 없습니다.</p>
+{% else %}
+<div class="chips">
+    {% if c.category %}<span class="chip" data-key="category">카테고리: {{ c.category }}</span>{% endif %}
+    {% if c.color %}<span class="chip" data-key="color">색상: {{ c.color }}</span>{% endif %}
+    {% if c.size %}<span class="chip" data-key="size">사이즈: {{ c.size }}</span>{% endif %}
+    {% if c.material %}<span class="chip" data-key="material">소재: {{ c.material }}{% if c.material_pct %} ≥{{ c.material_pct }}%{% endif %}</span>{% endif %}
+    {% if c.fit %}<span class="chip" data-key="fit">핏: {{ c.fit }}</span>{% endif %}
+    {% if c.max_price %}<span class="chip" data-key="max_price">최대 가격: {{ "{:,}".format(c.max_price) }}원</span>{% endif %}
+    {% if c.free_text %}<span class="chip chip-free" data-key="free_text">키워드: {{ c.free_text }}</span>{% endif %}
+</div>
+<p class="hint muted-small">파싱 방식: <code>{{ parsed_by }}</code></p>
+{% endif %}

@@ -1,9 +1,27 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="search">
-    <p class="hint">자연어로 조건을 입력하세요. 예: <code>검정색 100 사이즈 긴팔 남방 폴리에스테르 80 이상 루즈핏 2만원 이하</code></p>
-    <div id="search-placeholder">
-        <em>검색 UI는 #8에서 채워집니다.</em>
-    </div>
+    <form id="search-form"
+          hx-post="/parse"
+          hx-target="#parsed-panel"
+          hx-swap="innerHTML"
+          hx-trigger="submit, input from:input[name=q] delay:600ms changed">
+        <label for="q" class="visually-hidden">검색어</label>
+        <input type="text"
+               id="q"
+               name="q"
+               placeholder="예: 검정 100 사이즈 긴팔 남방 폴리에스테르 80 이상 루즈핏 2만원 이하"
+               autocomplete="off"
+               autofocus>
+        <button type="submit">검색</button>
+    </form>
+
+    <section id="parsed-panel" class="parsed-panel">
+        <p class="hint">검색어를 입력하면 파싱된 조건이 여기에 표시됩니다.</p>
+    </section>
+
+    <section id="results" class="results">
+        <p class="hint muted-small">검색 결과는 #9에서 스트리밍됩니다.</p>
+    </section>
 </section>
 {% endblock %}
