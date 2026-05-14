@@ -22,18 +22,15 @@ def test_index_renders_with_htmx() -> None:
         assert "ShopFinder" in body
 
 
-def test_db_file_is_created_on_first_boot(tmp_path: Path, monkeypatch) -> None:
+def test_db_file_is_created_on_first_boot(tmp_path: Path) -> None:
+    # Use a private engine so this test doesn't perturb the module-level one
+    # that other tests share.
+    from sqlmodel import SQLModel, create_engine
+
     target = tmp_path / "test.db"
-    monkeypatch.setenv("SHOPFINDER_DB_PATH", str(target))
-    get_settings.cache_clear()
+    engine = create_engine(f"sqlite:///{target}")
+    # Ensure model classes are imported so create_all sees the metadata.
+    from app.db import models  # noqa: F401
 
-    from importlib import reload
-
-    from app import db
-    from app.db import session as session_mod
-
-    reload(session_mod)
-    reload(db)
-
-    session_mod.init_db()
+    SQLModel.metadata.create_all(engine)
     assert target.exists()

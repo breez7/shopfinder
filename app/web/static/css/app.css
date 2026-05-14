@@ -121,6 +121,30 @@ code {
     font-weight: 400;
 }
 
+/* History page */
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 0.92rem;
+}
+.history-table th, .history-table td {
+    padding: 0.55rem 0.7rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+.history-table thead { background: #f0f2f5; }
+.history-table tr:last-child td { border-bottom: none; }
+.history-table .query { max-width: 32ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-table .replay {
+    text-decoration: none;
+    color: var(--accent);
+    font-weight: 600;
+}
+
 /* Results */
 .results { margin-top: 1.5rem; }
 .results-header {
