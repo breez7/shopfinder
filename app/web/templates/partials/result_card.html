@@ -1,0 +1,12 @@
+<article class="result-card" data-shop="{{ r.shop_slug }}">
+    {% if r.image_url %}<img class="result-img" src="{{ r.image_url }}" alt="" loading="lazy">{% endif %}
+    <div class="result-body">
+        <a class="result-title" href="{{ r.product_url }}" target="_blank" rel="noopener noreferrer">{{ r.title }}</a>
+        <div class="result-meta">
+            <span class="price">{% if r.price %}{{ "{:,}".format(r.price) }}원{% else %}가격 미상{% endif %}</span>
+            <span class="shop-badge">{{ r.shop_slug }}</span>
+        </div>
+        {% if r.raw_specs %}<div class="specs">{{ r.raw_specs }}</div>{% endif %}
+        {% if r.matched_reason %}<div class="matched-reason">{{ r.matched_reason }}</div>{% endif %}
+    </div>
+</article>

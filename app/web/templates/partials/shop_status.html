@@ -1,0 +1,3 @@
+<span class="shop-status shop-status-{{ kind }}" data-shop="{{ slug }}">
+    {{ slug }}: {% if kind == 'shop_started' %}검색 중…{% elif kind == 'shop_completed' %}완료{% elif kind == 'shop_failed' %}실패{% endif %}{% if message %} ({{ message }}){% endif %}
+</span>

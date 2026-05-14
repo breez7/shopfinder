@@ -8,10 +8,14 @@ def test_index_has_search_form_and_placeholders() -> None:
         r = client.get("/")
         assert r.status_code == 200
         body = r.text
-        assert 'hx-post="/parse"' in body
+        # Form posts via JS (search.js) which calls /parse + opens SSE for /search/stream
+        assert 'id="search-form"' in body
         assert 'name="q"' in body
-        assert "id=\"parsed-panel\"" in body
-        assert "id=\"results\"" in body
+        assert 'id="parsed-panel"' in body
+        assert 'id="result-grid"' in body
+        assert 'id="shop-status"' in body
+        # JS file loaded
+        assert "/static/js/search.js" in body
         # Viewport meta for mobile
         assert 'name="viewport"' in body
 

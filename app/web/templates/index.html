@@ -1,11 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="search">
-    <form id="search-form"
-          hx-post="/parse"
-          hx-target="#parsed-panel"
-          hx-swap="innerHTML"
-          hx-trigger="submit, input from:input[name=q] delay:600ms changed">
+    <form id="search-form">
         <label for="q" class="visually-hidden">검색어</label>
         <input type="text"
                id="q"
@@ -20,8 +16,13 @@
         <p class="hint">검색어를 입력하면 파싱된 조건이 여기에 표시됩니다.</p>
     </section>
 
-    <section id="results" class="results">
-        <p class="hint muted-small">검색 결과는 #9에서 스트리밍됩니다.</p>
+    <section class="results">
+        <header class="results-header">
+            <div id="shop-status" class="shop-status-list"></div>
+            <span class="results-count"><span id="result-count">0</span>개 결과</span>
+        </header>
+        <div id="result-grid" class="result-grid"></div>
     </section>
 </section>
+<script src="{{ url_for('static', path='/js/search.js') }}" defer></script>
 {% endblock %}
