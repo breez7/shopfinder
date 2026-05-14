@@ -72,6 +72,25 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 templates.env.globals["base_path"] = get_settings().root_path
 
 
+def _to_kst(value):
+    """Convert a (possibly naive UTC) datetime to a 'YYYY-MM-DD HH:MM' string
+    in Asia/Seoul. SearchHistory.created_at is `datetime.utcnow()` so it has
+    no tzinfo; we assume UTC for those."""
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M")
+    return str(value)
+
+
+templates.env.filters["kst"] = _to_kst
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()

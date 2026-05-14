@@ -43,7 +43,7 @@
             <tbody>
                 {% for row in rows %}
                 <tr>
-                    <td><time>{{ row.created_at.strftime("%Y-%m-%d %H:%M") }}</time></td>
+                    <td><time>{{ row.created_at | kst }}</time></td>
                     <td class="query">{{ row.raw_query }}</td>
                     <td><code>{{ row.parsed_by }}</code></td>
                     <td>{{ row.total_results }}</td>

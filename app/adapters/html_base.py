@@ -38,19 +38,35 @@ DEFAULT_USER_AGENT = (
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 DEFAULT_TIMEOUT_S = 8.0
-_PRICE_RE = re.compile(r"[0-9][\d,]*")
+_PERCENT_RE = re.compile(r"\d+\s*%")
+_NUMBER_RE = re.compile(r"[\d,]+")
+_MIN_PRICE_KRW = 100  # below this we're almost certainly looking at a
+                     # discount percentage / review count, not a price
 
 
 def _to_int_price(raw: Optional[str]) -> Optional[int]:
+    """Pull a KRW price out of a string that may also carry discount %,
+    review counts, star ratings, etc. Strategy:
+
+    1. Strip out `\\d+%` runs (discount percentages — the issue users hit
+       where '10%' was being read as a 10 KRW price).
+    2. Pick the largest remaining number (price > discount-count > rating
+       in basically every real-world card layout).
+    3. Reject anything under :data:`_MIN_PRICE_KRW` (100 KRW)."""
     if not raw:
         return None
-    m = _PRICE_RE.search(raw)
-    if not m:
-        return None
-    try:
-        return int(m.group(0).replace(",", ""))
-    except ValueError:
-        return None
+    cleaned = _PERCENT_RE.sub("", raw)
+    best: Optional[int] = None
+    for match in _NUMBER_RE.findall(cleaned):
+        try:
+            val = int(match.replace(",", ""))
+        except ValueError:
+            continue
+        if val < _MIN_PRICE_KRW:
+            continue
+        if best is None or val > best:
+            best = val
+    return best
 
 
 def _text(node: Optional[Node]) -> str:

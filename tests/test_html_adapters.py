@@ -34,6 +34,17 @@ def _truncate_warnings() -> None:
         ("\n  20,000  원", 20000),
         ("", None),
         ("free shipping", None),
+        # Real-world bugs the user hit:
+        ("10%", None),                         # discount badge only
+        ("20%", None),
+        ("10% 할인 15,900원", 15900),           # discount + price -> price wins
+        ("가격정보15,900원~", 15900),
+        ("정가 25,000원 10% 22,500원", 25000),   # multiple numbers -> largest
+        ("리뷰 1,234건 9,900원", 9900),         # largest wins when both are >100
+        # NOTE: a stray "123" with no other number is genuinely ambiguous
+        # (could be a 123-won discount sticker, a review count, etc.). The
+        # 100-won floor is intentionally low to keep cheap items like
+        # socks/stickers (~990 KRW) parseable.
     ],
 )
 def test_to_int_price(raw: str, expected: int | None) -> None:

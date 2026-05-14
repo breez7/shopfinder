@@ -26,7 +26,7 @@
             <tbody>
                 {% for w in rows %}
                 <tr>
-                    <td><time>{{ w.raised_at.strftime("%Y-%m-%d %H:%M") }}</time></td>
+                    <td><time>{{ w.raised_at | kst }}</time></td>
                     <td><code>{{ w.shop_slug }}</code></td>
                     <td><code>{{ w.kind }}</code></td>
                     <td>{{ w.message }}</td>
