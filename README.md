@@ -6,9 +6,37 @@
 
 전체 사양은 [PRD.md](PRD.md) 참고.
 
+## Run with Docker
+
+```bash
+# Build and start (one command)
+docker compose up -d
+
+# Health check
+curl http://localhost:8080/healthz
+
+# Logs
+docker compose logs -f app
+
+# Stop
+docker compose down
+```
+
+The SQLite database lives under `./data/` (bind-mounted) so it survives container restarts. Override env vars via a `.env` file (see `.env.example`).
+
+### Multi-arch build (for pushing a Pi-friendly image)
+
+```bash
+docker buildx build \
+    --platform linux/amd64,linux/arm64 \
+    -t shopfinder:latest \
+    -f docker/Dockerfile \
+    .
+```
+
 ## Status
 
-Draft / Pre-implementation. 구현 작업은 GitHub Issues로 추적.
+Phase 1 in progress. 구현 작업은 GitHub Issues로 추적.
 
 ## License
 
