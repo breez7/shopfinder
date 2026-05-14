@@ -15,7 +15,13 @@ engine = create_engine(
 
 
 def init_db() -> None:
+    # Import models so SQLModel.metadata is populated before create_all.
+    from app.db import models  # noqa: F401
+    from app.db.seed import seed_defaults
+
     SQLModel.metadata.create_all(engine)
+    with Session(engine) as session:
+        seed_defaults(session)
 
 
 def get_session() -> Iterator[Session]:
