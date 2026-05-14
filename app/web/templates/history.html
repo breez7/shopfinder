@@ -5,13 +5,13 @@
     <header class="history-header">
         <h1>검색 히스토리</h1>
         {% if total %}
-        <form action="/history/clear" method="post" hx-post="/history/clear" hx-confirm="모든 히스토리를 삭제할까요?" hx-swap="none">
+        <form action="{{ base_path }}/history/clear" method="post" hx-post="{{ base_path }}/history/clear" hx-confirm="모든 히스토리를 삭제할까요?" hx-swap="none">
             <button type="submit" class="btn-danger">전체 삭제</button>
         </form>
         {% endif %}
     </header>
 
-    <form action="/history" method="get" class="history-filters">
+    <form action="{{ base_path }}/history" method="get" class="history-filters">
         <input type="text" name="q" value="{{ q or '' }}" placeholder="검색어 필터…">
         <select name="days">
             <option value="0"{% if days == 0 %} selected{% endif %}>전체</option>
@@ -49,9 +49,9 @@
                     <td>{{ row.total_results }}</td>
                     <td>{{ row.elapsed_ms }}ms</td>
                     <td class="actions">
-                        <a class="replay" href="/?q={{ row.raw_query | urlencode }}">재실행</a>
+                        <a class="replay" href="{{ base_path }}/?q={{ row.raw_query | urlencode }}">재실행</a>
                         <button class="btn-small"
-                                hx-post="/history/{{ row.id }}/delete"
+                                hx-post="{{ base_path }}/history/{{ row.id }}/delete"
                                 hx-target="closest tr"
                                 hx-swap="outerHTML">삭제</button>
                     </td>
@@ -62,7 +62,7 @@
 
         {% if has_prev or has_next %}
         <nav class="pagination">
-            {% set base = "/history?q=" ~ (q | urlencode) ~ "&days=" ~ days %}
+            {% set base = base_path ~ "/history?q=" ~ (q | urlencode) ~ "&days=" ~ days %}
             {% if has_prev %}<a href="{{ base }}&page={{ page - 1 }}">← 이전</a>{% endif %}
             <span>{{ page }} / {{ ((total - 1) // per_page) + 1 }}</span>
             {% if has_next %}<a href="{{ base }}&page={{ page + 1 }}">다음 →</a>{% endif %}

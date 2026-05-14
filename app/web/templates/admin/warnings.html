@@ -5,7 +5,7 @@
     <header class="warnings-header">
         <h1>어댑터 경고</h1>
         {% if rows %}
-        <form action="/admin/warnings/clear" method="post" hx-post="/admin/warnings/clear" hx-confirm="모든 경고를 삭제할까요?">
+        <form action="{{ base_path }}/admin/warnings/clear" method="post" hx-post="{{ base_path }}/admin/warnings/clear" hx-confirm="모든 경고를 삭제할까요?">
             <button type="submit" class="btn-danger">전체 삭제</button>
         </form>
         {% endif %}
@@ -32,7 +32,7 @@
                     <td>{{ w.message }}</td>
                     <td>
                         <button class="btn-small"
-                                hx-post="/admin/warnings/{{ w.id }}/dismiss"
+                                hx-post="{{ base_path }}/admin/warnings/{{ w.id }}/dismiss"
                                 hx-target="closest tr"
                                 hx-swap="outerHTML">무시</button>
                     </td>

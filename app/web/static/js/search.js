@@ -1,4 +1,7 @@
 (function () {
+    const BASE = (window.SHOPFINDER_BASE || '').replace(/\/$/, '');
+    function path(p) { return BASE + p; }
+
     let currentSource = null;
     let currentHistoryId = null;
     const form = document.getElementById('search-form');
@@ -119,7 +122,7 @@
     async function refreshParsedPanel(q) {
         const fd = new FormData();
         fd.append('q', q);
-        const res = await fetch('/parse', { method: 'POST', body: fd });
+        const res = await fetch(path('/parse'), { method: 'POST', body: fd });
         parsedPanel.innerHTML = await res.text();
         bindParsedFormHandlers();
     }
@@ -162,7 +165,7 @@
         shopsSeen.clear();
         disabledShops.clear();
         resultCount.textContent = '0';
-        const es = new EventSource('/search/stream?' + qs);
+        const es = new EventSource(path('/search/stream') + '?' + qs);
         currentSource = es;
         currentHistoryId = null;
         let count = 0;
@@ -211,7 +214,7 @@
         resultCount.textContent = '0';
         if (!q.trim()) return;
 
-        let url = '/search/stream?q=' + encodeURIComponent(q);
+        let url = path('/search/stream') + '?q=' + encodeURIComponent(q);
         if (forceRefresh) url += '&refresh=1';
         const es = new EventSource(url);
         currentSource = es;
@@ -311,7 +314,7 @@
         fd.append('history_id', String(currentHistoryId));
         fd.append('shop_slug', slug);
         fd.append('product_url', url);
-        navigator.sendBeacon ? navigator.sendBeacon('/click', fd) : fetch('/click', { method: 'POST', body: fd, keepalive: true });
+        navigator.sendBeacon ? navigator.sendBeacon(path('/click'), fd) : fetch(path('/click'), { method: 'POST', body: fd, keepalive: true });
     });
 
     if (input.value.trim()) {

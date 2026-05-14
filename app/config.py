@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     port: int = 8080
     db_path: Path = Path("./data/shopfinder.db")
     secret_key: str = "change-me"
+    # Set to e.g. "/shopfinder" when deploying behind a path-stripping reverse
+    # proxy (Traefik StripPrefix). Empty string = root deployment.
+    root_path: str = ""
 
     @property
     def sqlite_url(self) -> str:

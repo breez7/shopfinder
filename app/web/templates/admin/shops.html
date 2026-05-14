@@ -20,14 +20,14 @@
                 <td><code>{{ shop.slug }}</code>{% if is_builtin(shop.slug) %} <small>(기본)</small>{% endif %}</td>
                 <td>{{ shop.name }}</td>
                 <td>
-                    <form action="/admin/shops/{{ shop.slug }}/toggle" method="post" hx-post="/admin/shops/{{ shop.slug }}/toggle" hx-swap="none">
+                    <form action="{{ base_path }}/admin/shops/{{ shop.slug }}/toggle" method="post" hx-post="{{ base_path }}/admin/shops/{{ shop.slug }}/toggle" hx-swap="none">
                         <button type="submit" class="btn-small">{{ "활성" if shop.enabled else "비활성" }}</button>
                     </form>
                 </td>
                 <td><code>{{ shop.adapter_module }}</code></td>
                 <td>
                     {% if not is_builtin(shop.slug) %}
-                    <form action="/admin/shops/{{ shop.slug }}/delete" method="post" hx-post="/admin/shops/{{ shop.slug }}/delete" hx-confirm="삭제할까요?" hx-target="closest tr" hx-swap="outerHTML">
+                    <form action="{{ base_path }}/admin/shops/{{ shop.slug }}/delete" method="post" hx-post="{{ base_path }}/admin/shops/{{ shop.slug }}/delete" hx-confirm="삭제할까요?" hx-target="closest tr" hx-swap="outerHTML">
                         <button type="submit" class="btn-danger btn-small">삭제</button>
                     </form>
                     {% endif %}
@@ -38,7 +38,7 @@
     </table>
 
     <h2>새 쇼핑몰 추가 (YAML/JSON)</h2>
-    <form action="/admin/shops/add" method="post" hx-post="/admin/shops/add" hx-target="#add-msg" hx-swap="innerHTML">
+    <form action="{{ base_path }}/admin/shops/add" method="post" hx-post="{{ base_path }}/admin/shops/add" hx-target="#add-msg" hx-swap="innerHTML">
         <div class="form-row">
             <label>슬러그
                 <input type="text" name="slug" placeholder="my-custom-shop" required>

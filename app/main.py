@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, desc, select
 from sse_starlette.sse import EventSourceResponse
 
+from app.config import get_settings
 from app.adapters.registry import load_enabled_adapters
 from app.adapters.types import ParsedConditions, SearchResult
 from app.auth import (
@@ -68,6 +69,7 @@ TEMPLATES_DIR = BASE_DIR / "web" / "templates"
 STATIC_DIR = BASE_DIR / "web" / "static"
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+templates.env.globals["base_path"] = get_settings().root_path
 
 
 @asynccontextmanager
@@ -92,9 +94,21 @@ def _parsed_panel_payload(conditions: ParsedConditions, parsed_by: str) -> dict:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="ShopFinder", version="0.1.0", lifespan=lifespan)
+    settings = get_settings()
+    app = FastAPI(
+        title="ShopFinder",
+        version="0.1.0",
+        lifespan=lifespan,
+        root_path=settings.root_path,
+    )
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+    # Expose root_path to every template render under the name 'base_path'.
+    @app.middleware("http")
+    async def _inject_base_path(request: Request, call_next):
+        request.state.base_path = settings.root_path
+        return await call_next(request)
 
     @app.middleware("http")
     async def password_gate(request: Request, call_next):

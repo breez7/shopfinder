@@ -3,7 +3,7 @@
 {% if warnings %}
 <div class="warning-banner">
     어댑터 경고 {{ warnings|length }}건이 있습니다.
-    <a href="/admin/warnings">자세히 보기 →</a>
+    <a href="{{ base_path }}/admin/warnings">자세히 보기 →</a>
 </div>
 {% endif %}
 <section class="search">

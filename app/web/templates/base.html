@@ -10,14 +10,15 @@
 </head>
 <body>
 <header class="site-header">
-    <a href="/" class="brand">ShopFinder</a>
+    <a href="{{ base_path or '/' }}{% if base_path %}/{% endif %}" class="brand">ShopFinder</a>
     <nav>
-        <a href="/">검색</a>
-        <a href="/history">히스토리</a>
-        <a href="/settings">설정</a>
-        <a href="/admin/warnings">경고</a>
+        <a href="{{ base_path }}/">검색</a>
+        <a href="{{ base_path }}/history">히스토리</a>
+        <a href="{{ base_path }}/settings">설정</a>
+        <a href="{{ base_path }}/admin/warnings">경고</a>
     </nav>
 </header>
+<script>window.SHOPFINDER_BASE = "{{ base_path }}";</script>
 <main>
     {% block content %}{% endblock %}
 </main>

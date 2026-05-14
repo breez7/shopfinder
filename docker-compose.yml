@@ -6,21 +6,57 @@ services:
     image: shopfinder:latest
     container_name: shopfinder
     restart: unless-stopped
-    ports:
-      - "8080:8080"
+    # No host port mapping — Traefik handles ingress on the tesla network.
+    expose:
+      - "8080"
     volumes:
       - ./data:/data
+    # NOTE: basicauth runs inside Traefik (the tesla-proxy-1 container).
+    # The .htpasswd file is already mounted there from /home/james/tesla/.htpasswd
+    # → /auth/.htpasswd, so the usersfile path in the labels below resolves there.
     environment:
-      # Override any of these in .env or via `docker compose --env-file`
       SHOPFINDER_HOST: 0.0.0.0
       SHOPFINDER_PORT: "8080"
       SHOPFINDER_DB_PATH: /data/shopfinder.db
+      # Tells FastAPI it lives at /shopfinder so url_for() / static assets /
+      # template links all emit the prefix. Traefik StripPrefix below removes
+      # the prefix before forwarding to this container.
+      SHOPFINDER_ROOT_PATH: /shopfinder
     env_file:
       - path: .env
         required: false
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"]
-      interval: 30s
-      timeout: 3s
-      start_period: 10s
-      retries: 3
+    networks:
+      tesla_default:
+        ipv4_address: 172.18.0.12
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=tesla_default"
+      - "traefik.http.services.shopfinder.loadbalancer.server.port=8080"
+
+      # HTTP -> HTTPS redirect (reuse the 'redirect' middleware defined in
+      # the TeslaMate compose; if Traefik doesn't see it, we'll fall back
+      # to defining our own.)
+      - "traefik.http.middlewares.shopfinder-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.shopfinder-insecure.rule=Host(`james777lee.duckdns.org`) && PathPrefix(`/shopfinder`)"
+      - "traefik.http.routers.shopfinder-insecure.entrypoints=web"
+      - "traefik.http.routers.shopfinder-insecure.middlewares=shopfinder-redirect"
+
+      # basicauth (reuse TeslaMate's .htpasswd, mounted into the proxy
+      # container as /auth/.htpasswd from the TeslaMate compose).
+      - "traefik.http.middlewares.shopfinder-auth.basicauth.realm=shopfinder"
+      - "traefik.http.middlewares.shopfinder-auth.basicauth.usersfile=/auth/.htpasswd"
+
+      # StripPrefix so /shopfinder/foo -> /foo inside the container.
+      - "traefik.http.middlewares.shopfinder-strip.stripprefix.prefixes=/shopfinder"
+
+      # Main HTTPS router
+      - "traefik.http.routers.shopfinder.rule=Host(`james777lee.duckdns.org`) && PathPrefix(`/shopfinder`)"
+      - "traefik.http.routers.shopfinder.entrypoints=websecure"
+      - "traefik.http.routers.shopfinder.tls=true"
+      - "traefik.http.routers.shopfinder.tls.certresolver=tmhttpchallenge"
+      - "traefik.http.routers.shopfinder.middlewares=shopfinder-auth,shopfinder-strip"
+      - "traefik.http.routers.shopfinder.service=shopfinder"
+
+networks:
+  tesla_default:
+    external: true
