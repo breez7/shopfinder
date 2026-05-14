@@ -69,11 +69,12 @@ async def fetch_rendered_html(
                         )
                     except Exception:
                         pass  # selector never appeared — return whatever we have
-                else:
-                    try:
-                        await page.wait_for_load_state("networkidle", timeout=4000)
-                    except Exception:
-                        pass
+                # Always try a short networkidle wait so SPA hydration of
+                # sibling cards completes before we capture the DOM.
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=4000)
+                except Exception:
+                    pass
                 return await page.content()
             finally:
                 await browser.close()

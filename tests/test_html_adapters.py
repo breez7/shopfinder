@@ -166,9 +166,12 @@ def test_each_adapter_has_required_config(cls, slug: str, url_substring: str) ->
     assert a.slug == slug
     assert url_substring in a.search_url_template
     assert a.card_selector
-    assert a.title_selector
-    assert a.price_selector
-    assert a.link_selector
+    # Musinsa parses every field from data-* attributes on the card anchor
+    # itself, so title/price/link selectors are intentionally empty.
+    if slug != "musinsa":
+        assert a.title_selector
+        assert a.price_selector
+        assert a.link_selector
 
 
 @respx.mock
