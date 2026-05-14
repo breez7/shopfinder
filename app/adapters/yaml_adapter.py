@@ -45,3 +45,4 @@ class YamlHtmlAdapter(HtmlSearchAdapter):
         self.link_selector = c.get("link_selector", "")
         self.image_selector = c.get("image_selector", "")
         self.specs_selector = c.get("specs_selector", "")
+        self.requires_js = bool(c.get("requires_js", False))

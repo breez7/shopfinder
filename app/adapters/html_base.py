@@ -18,6 +18,11 @@ import httpx
 from selectolax.parser import HTMLParser, Node
 
 from app.adapters.base import ShopAdapter
+from app.adapters.playwright_base import (
+    fetch_rendered_html,
+    playwright_available,
+    playwright_enabled,
+)
 from app.adapters.types import ParsedConditions, SearchResult
 from app.warnings import (
     KIND_BOT_DETECTION,
@@ -68,6 +73,7 @@ class HtmlSearchAdapter(ShopAdapter):
     link_selector: str = ""
     image_selector: str = ""
     specs_selector: str = ""
+    requires_js: bool = False  # set true for sites that need Playwright rendering
 
     # If a response body contains any of these substrings we assume bot detection
     bot_signatures: tuple[str, ...] = (
@@ -107,6 +113,35 @@ class HtmlSearchAdapter(ShopAdapter):
             except httpx.HTTPError as exc:
                 record_warning(self.slug, KIND_HTTP_ERROR, f"{type(exc).__name__}: {exc}")
                 return None
+
+    async def _fetch_body(self, url: str) -> tuple[Optional[str], Optional[int]]:
+        """Return (html, status_code). For requires_js adapters routes through
+        Playwright (issue #27) when enabled; otherwise short-circuits with a
+        clear status_code=0 + None body that callers treat as 'unavailable'."""
+        if self.requires_js:
+            if not playwright_enabled():
+                return None, 0  # caller emits the 'enable Playwright' error
+            if not playwright_available():
+                record_warning(
+                    self.slug,
+                    KIND_HTTP_ERROR,
+                    "Playwright enabled but not installed",
+                )
+                return None, 0
+            await asyncio.sleep(random.uniform(self.min_delay_s, self.max_delay_s))
+            async with self._lock:
+                html = await fetch_rendered_html(url)
+            if html is None:
+                record_warning(
+                    self.slug, KIND_HTTP_ERROR, "Playwright fetch failed"
+                )
+                return None, 0
+            return html, 200
+
+        response = await self._fetch(url)
+        if response is None:
+            return None, None
+        return response.text, response.status_code
 
     def _is_bot_challenge(self, body: str) -> bool:
         lowered = body[:2000].lower()
@@ -152,17 +187,21 @@ class HtmlSearchAdapter(ShopAdapter):
             return
 
         url = self._build_url(conditions)
-        response = await self._fetch(url)
-        if response is None:
+        body, status = await self._fetch_body(url)
+        if body is None:
+            if self.requires_js and not playwright_enabled():
+                yield SearchResult.make_error(
+                    self.slug,
+                    "enable Playwright (ENABLE_PLAYWRIGHT=1) to use this adapter",
+                )
+                return
             yield SearchResult.make_error(self.slug, "HTTP error (see warnings)")
             return
-        if response.status_code != 200:
-            msg = f"HTTP {response.status_code}"
+        if status not in (None, 200):
+            msg = f"HTTP {status}"
             record_warning(self.slug, KIND_HTTP_ERROR, msg)
             yield SearchResult.make_error(self.slug, msg)
             return
-
-        body = response.text
         if self._is_bot_challenge(body):
             record_warning(
                 self.slug,
