@@ -2,9 +2,32 @@
 {% block title %}히스토리 · ShopFinder{% endblock %}
 {% block content %}
 <section class="history">
-    <h1>검색 히스토리</h1>
+    <header class="history-header">
+        <h1>검색 히스토리</h1>
+        {% if total %}
+        <form action="/history/clear" method="post" hx-post="/history/clear" hx-confirm="모든 히스토리를 삭제할까요?" hx-swap="none">
+            <button type="submit" class="btn-danger">전체 삭제</button>
+        </form>
+        {% endif %}
+    </header>
+
+    <form action="/history" method="get" class="history-filters">
+        <input type="text" name="q" value="{{ q or '' }}" placeholder="검색어 필터…">
+        <select name="days">
+            <option value="0"{% if days == 0 %} selected{% endif %}>전체</option>
+            <option value="7"{% if days == 7 %} selected{% endif %}>최근 7일</option>
+            <option value="30"{% if days == 30 %} selected{% endif %}>최근 30일</option>
+            <option value="90"{% if days == 90 %} selected{% endif %}>최근 90일</option>
+        </select>
+        <button type="submit">필터</button>
+    </form>
+
     {% if not rows %}
+        {% if q or days %}
+        <p class="hint">필터에 맞는 검색 기록이 없습니다.</p>
+        {% else %}
         <p class="hint">아직 검색 기록이 없습니다.</p>
+        {% endif %}
     {% else %}
         <table class="history-table">
             <thead>
@@ -25,11 +48,26 @@
                     <td><code>{{ row.parsed_by }}</code></td>
                     <td>{{ row.total_results }}</td>
                     <td>{{ row.elapsed_ms }}ms</td>
-                    <td><a class="replay" href="/?q={{ row.raw_query | urlencode }}">재실행</a></td>
+                    <td class="actions">
+                        <a class="replay" href="/?q={{ row.raw_query | urlencode }}">재실행</a>
+                        <button class="btn-small"
+                                hx-post="/history/{{ row.id }}/delete"
+                                hx-target="closest tr"
+                                hx-swap="outerHTML">삭제</button>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+
+        {% if has_prev or has_next %}
+        <nav class="pagination">
+            {% set base = "/history?q=" ~ (q | urlencode) ~ "&days=" ~ days %}
+            {% if has_prev %}<a href="{{ base }}&page={{ page - 1 }}">← 이전</a>{% endif %}
+            <span>{{ page }} / {{ ((total - 1) // per_page) + 1 }}</span>
+            {% if has_next %}<a href="{{ base }}&page={{ page + 1 }}">다음 →</a>{% endif %}
+        </nav>
+        {% endif %}
     {% endif %}
 </section>
 {% endblock %}

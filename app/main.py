@@ -357,16 +357,69 @@ def create_app() -> FastAPI:
     @app.get("/history", response_class=HTMLResponse)
     def history_page(
         request: Request,
+        q: str = "",
+        days: int = 0,
+        page: int = 1,
         session: Session = Depends(get_session),
     ) -> HTMLResponse:
+        from datetime import datetime, timedelta
+
+        page = max(1, page)
+        per_page = 50
+        query = select(SearchHistory)
+        if q.strip():
+            like = f"%{q.strip()}%"
+            query = query.where(SearchHistory.raw_query.like(like))
+        if days > 0:
+            cutoff = datetime.utcnow() - timedelta(days=days)
+            query = query.where(SearchHistory.created_at >= cutoff)
+        total = len(session.exec(query).all())
         rows = session.exec(
-            select(SearchHistory).order_by(desc(SearchHistory.created_at)).limit(50)
+            query.order_by(desc(SearchHistory.created_at))
+            .offset((page - 1) * per_page)
+            .limit(per_page)
         ).all()
         return templates.TemplateResponse(
             request,
             "history.html",
-            {"rows": rows},
+            {
+                "rows": rows,
+                "q": q,
+                "days": days,
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "has_prev": page > 1,
+                "has_next": page * per_page < total,
+            },
         )
+
+    @app.post("/history/{history_id}/delete")
+    def history_delete(
+        history_id: int, session: Session = Depends(get_session)
+    ) -> JSONResponse:
+        row = session.get(SearchHistory, history_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="not found")
+        # Cascade delete clicks
+        for click in session.exec(
+            select(ClickLog).where(ClickLog.search_history_id == history_id)
+        ).all():
+            session.delete(click)
+        session.delete(row)
+        session.commit()
+        return JSONResponse({"ok": True})
+
+    @app.post("/history/clear")
+    def history_clear(session: Session = Depends(get_session)) -> JSONResponse:
+        deleted = 0
+        for row in session.exec(select(ClickLog)).all():
+            session.delete(row)
+        for row in session.exec(select(SearchHistory)).all():
+            session.delete(row)
+            deleted += 1
+        session.commit()
+        return JSONResponse({"ok": True, "deleted": deleted})
 
     @app.get("/admin/warnings", response_class=HTMLResponse)
     def admin_warnings(
