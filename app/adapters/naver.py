@@ -26,15 +26,15 @@ def _clean_title(raw: str) -> str:
 
 
 def _read_settings_credentials() -> tuple[Optional[str], Optional[str]]:
-    """Settings-table values win over env so the /settings UI (#15) can override at runtime."""
+    """Settings-table values win over env so the /settings UI can override at runtime."""
     try:
         with Session(engine) as session:
-            cid = session.get(Setting, "naver_client_id")
-            csec = session.get(Setting, "naver_client_secret")
-            cid_val = cid.value if cid and cid.value else None
-            csec_val = csec.value if csec and csec.value else None
-            if cid_val and csec_val:
-                return cid_val, csec_val
+            cid_val = session.get(Setting, "naver_client_id")
+            csec_val = session.get(Setting, "naver_client_secret")
+            cid = cid_val.value if cid_val and cid_val.value else None
+            csec = csec_val.value if csec_val and csec_val.value else None
+            if cid and csec:
+                return cid, csec
     except Exception:  # noqa: BLE001 — DB may not exist in some test setups
         pass
     return os.getenv("NAVER_CLIENT_ID"), os.getenv("NAVER_CLIENT_SECRET")

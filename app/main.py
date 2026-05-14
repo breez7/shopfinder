@@ -16,8 +16,20 @@ from app.adapters.registry import load_enabled_adapters
 from app.adapters.types import ParsedConditions
 from app.db.models import ClickLog, SearchHistory
 from app.db.session import engine, get_session, init_db
+from app.llm.client import connection_test as llm_connection_test
 from app.llm.regex_parser import parse as regex_parse
 from app.search import run_search
+from app.settings_store import (
+    KEY_LLM_API_KEY,
+    KEY_LLM_BASE_URL,
+    KEY_LLM_CALL_CAP,
+    KEY_LLM_MODEL,
+    KEY_NAVER_CLIENT_ID,
+    KEY_NAVER_CLIENT_SECRET,
+    get as settings_get,
+    mask as settings_mask,
+    set_ as settings_set,
+)
 from app.warnings import (
     clear_all as warnings_clear_all,
     dismiss as warnings_dismiss,
@@ -198,6 +210,50 @@ def create_app() -> FastAPI:
     @app.post("/admin/warnings/clear")
     def admin_clear(session: Session = Depends(get_session)):
         return JSONResponse({"ok": True, "deleted": warnings_clear_all(session)})
+
+    @app.get("/settings", response_class=HTMLResponse)
+    def settings_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
+        api_key = settings_get(session, KEY_LLM_API_KEY)
+        naver_secret = settings_get(session, KEY_NAVER_CLIENT_SECRET)
+        return templates.TemplateResponse(
+            request,
+            "settings.html",
+            {
+                "llm_base_url": settings_get(session, KEY_LLM_BASE_URL),
+                "llm_api_key_masked": settings_mask(api_key),
+                "llm_model": settings_get(session, KEY_LLM_MODEL),
+                "llm_call_cap": settings_get(session, KEY_LLM_CALL_CAP, "0"),
+                "naver_client_id": settings_get(session, KEY_NAVER_CLIENT_ID),
+                "naver_secret_masked": settings_mask(naver_secret),
+            },
+        )
+
+    @app.post("/settings", response_class=HTMLResponse)
+    def settings_save(
+        llm_base_url: str = Form(default=""),
+        llm_api_key: str = Form(default=""),
+        llm_model: str = Form(default=""),
+        llm_call_cap: str = Form(default="0"),
+        naver_client_id: str = Form(default=""),
+        naver_client_secret: str = Form(default=""),
+        session: Session = Depends(get_session),
+    ) -> HTMLResponse:
+        settings_set(session, KEY_LLM_BASE_URL, llm_base_url.strip())
+        settings_set(session, KEY_LLM_MODEL, llm_model.strip())
+        settings_set(session, KEY_LLM_CALL_CAP, llm_call_cap.strip() or "0")
+        settings_set(session, KEY_NAVER_CLIENT_ID, naver_client_id.strip())
+        # API key + Naver secret: empty input means "leave existing value alone"
+        if llm_api_key.strip():
+            settings_set(session, KEY_LLM_API_KEY, llm_api_key.strip())
+        if naver_client_secret.strip():
+            settings_set(session, KEY_NAVER_CLIENT_SECRET, naver_client_secret.strip())
+        return HTMLResponse("<span style='color:#2ea44f'>저장됨</span>")
+
+    @app.post("/settings/llm-test", response_class=HTMLResponse)
+    async def settings_llm_test() -> HTMLResponse:
+        ok, msg = await llm_connection_test()
+        color = "#2ea44f" if ok else "#cf222e"
+        return HTMLResponse(f"<span style='color:{color}'>{msg}</span>")
 
     return app
 

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}설정 · ShopFinder{% endblock %}
+{% block content %}
+<section class="settings">
+    <h1>설정</h1>
+
+    <form id="settings-form" hx-post="/settings" hx-target="#settings-msg" hx-swap="innerHTML">
+        <fieldset>
+            <legend>LLM (OpenAI 호환)</legend>
+            <label>베이스 URL
+                <input type="text" name="llm_base_url" value="{{ llm_base_url }}"
+                       placeholder="예: http://lan-host:1234/v1">
+            </label>
+            <label>API Key
+                <input type="text" name="llm_api_key" value="" placeholder="{{ llm_api_key_masked or '(미설정)' }}">
+                <small class="hint muted-small">현재 저장된 키는 보안상 노출되지 않습니다. 비워두면 기존 값 유지.</small>
+            </label>
+            <label>모델 이름
+                <input type="text" name="llm_model" value="{{ llm_model }}" placeholder="예: glm-4-flash">
+            </label>
+            <label>검색 1회당 LLM 호출 상한 (0 = 무제한)
+                <input type="number" name="llm_call_cap" value="{{ llm_call_cap }}" min="0">
+            </label>
+        </fieldset>
+
+        <fieldset>
+            <legend>네이버 쇼핑 Open API</legend>
+            <label>Client ID
+                <input type="text" name="naver_client_id" value="{{ naver_client_id }}" placeholder="(미설정)">
+            </label>
+            <label>Client Secret
+                <input type="text" name="naver_client_secret" value="" placeholder="{{ naver_secret_masked or '(미설정)' }}">
+                <small class="hint muted-small">현재 저장된 시크릿은 노출되지 않습니다. 비워두면 기존 값 유지.</small>
+            </label>
+        </fieldset>
+
+        <div class="settings-actions">
+            <button type="submit">저장</button>
+            <button type="button" hx-post="/settings/llm-test" hx-target="#llm-test-msg" hx-swap="innerHTML">연결 테스트</button>
+        </div>
+    </form>
+
+    <p id="settings-msg" class="hint"></p>
+    <p id="llm-test-msg" class="hint"></p>
+</section>
+{% endblock %}
