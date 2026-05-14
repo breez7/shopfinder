@@ -114,6 +114,16 @@ def test_purge_expired_removes_old_rows() -> None:
 
 def _enable_only_naver() -> None:
     with Session(engine) as session:
+        # naver was retired from BUILTIN_SLUGS; recreate the row for the test.
+        if not session.exec(select(Shop).where(Shop.slug == "naver")).first():
+            session.add(
+                Shop(
+                    slug="naver",
+                    name="네이버 쇼핑",
+                    adapter_module="app.adapters.naver:NaverAdapter",
+                    enabled=True,
+                )
+            )
         for s in session.exec(select(Shop)).all():
             s.enabled = s.slug == "naver"
             session.add(s)

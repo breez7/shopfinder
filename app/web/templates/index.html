@@ -1,11 +1,5 @@
 {% extends "base.html" %}
 {% block content %}
-{% if warnings %}
-<div class="warning-banner">
-    어댑터 경고 {{ warnings|length }}건이 있습니다.
-    <a href="{{ base_path }}/admin/warnings">자세히 보기 →</a>
-</div>
-{% endif %}
 <section class="search">
     <form id="search-form">
         <label for="q" class="visually-hidden">검색어</label>
@@ -25,6 +19,11 @@
     </section>
 
     <section class="results">
+        <div id="loading-banner" class="loading-banner" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <span class="loading-text">검색 중… <span id="loading-phase">조건 파싱 중</span></span>
+            <button type="button" id="loading-cancel" class="btn-small">중단</button>
+        </div>
         <header class="results-header">
             <div id="shop-status" class="shop-status-list"></div>
             <span class="results-count"><span id="result-count">0</span>개 결과</span>

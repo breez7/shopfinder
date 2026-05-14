@@ -115,16 +115,16 @@ def test_FR3_adapter_interface_loads_built_ins_plus_yaml() -> None:
         )
         adapters = load_enabled_adapters(session)
         slugs = {a.slug for a in adapters}
-        assert {"naver", "coupang", "eleventh", "gmarket", "musinsa", "custom-for-fr3"} <= slugs
+        assert {"eleventh", "gmarket", "musinsa", "custom-for-fr3"} <= slugs
 
 
-def test_FR4_default_five_shops_present_with_correct_modules() -> None:
+def test_FR4_default_shops_present_with_correct_modules() -> None:
+    """Default seed currently ships 11번가/G마켓/무신사. Naver + Coupang were
+    retired at user request — adapters remain importable for tests."""
     _reset()
     with Session(engine) as session:
         shops = {s.slug: s for s in session.exec(select(Shop)).all()}
         expected = {
-            "naver": "app.adapters.naver:NaverAdapter",
-            "coupang": "app.adapters.coupang:CoupangAdapter",
             "eleventh": "app.adapters.eleventh:ElevenstAdapter",
             "gmarket": "app.adapters.gmarket:GmarketAdapter",
             "musinsa": "app.adapters.musinsa:MusinsaAdapter",
@@ -139,8 +139,18 @@ async def test_FR5_sse_streaming_emits_typed_events(monkeypatch) -> None:
     _reset()
     monkeypatch.setenv("NAVER_CLIENT_ID", "x")
     monkeypatch.setenv("NAVER_CLIENT_SECRET", "y")
-    # Disable all but naver for a fast deterministic run
+    # Restore the naver adapter row (retired from default seed) and
+    # leave it as the only enabled shop for a fast deterministic run.
     with Session(engine) as session:
+        if not session.exec(select(Shop).where(Shop.slug == "naver")).first():
+            session.add(
+                Shop(
+                    slug="naver",
+                    name="네이버 쇼핑",
+                    adapter_module="app.adapters.naver:NaverAdapter",
+                    enabled=True,
+                )
+            )
         for s in session.exec(select(Shop)).all():
             s.enabled = s.slug == "naver"
             session.add(s)
@@ -246,10 +256,10 @@ def test_FR11_shop_management_admin_endpoints() -> None:
     with TestClient(app) as client:
         r = client.get("/admin/shops")
         assert r.status_code == 200
-        for slug in ("naver", "coupang", "eleventh", "gmarket", "musinsa"):
+        for slug in ("eleventh", "gmarket", "musinsa"):
             assert slug in r.text
         # Built-ins cannot be deleted
-        r = client.post("/admin/shops/naver/delete")
+        r = client.post("/admin/shops/musinsa/delete")
         assert r.status_code == 400
         # YAML shop add roundtrip
         r = client.post(

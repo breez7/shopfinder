@@ -77,16 +77,10 @@ def test_load_class_resolves_module_path() -> None:
     assert cls is FakeAdapter
 
 
-def test_load_enabled_adapters_returns_all_five_built_in_shops(session: Session) -> None:
+def test_load_enabled_adapters_returns_default_built_in_shops(session: Session) -> None:
     seed_defaults(session)
     adapters = load_enabled_adapters(session)
-    assert sorted(a.slug for a in adapters) == [
-        "coupang",
-        "eleventh",
-        "gmarket",
-        "musinsa",
-        "naver",
-    ]
+    assert sorted(a.slug for a in adapters) == ["eleventh", "gmarket", "musinsa"]
 
 
 def test_load_enabled_adapters_loads_present_modules(session: Session) -> None:
@@ -103,7 +97,7 @@ def test_load_enabled_adapters_loads_present_modules(session: Session) -> None:
 
     adapters = load_enabled_adapters(session)
     slugs = sorted(a.slug for a in adapters)
-    assert slugs == ["coupang", "eleventh", "fake", "gmarket", "musinsa", "naver"]
+    assert slugs == ["eleventh", "fake", "gmarket", "musinsa"]
 
 
 def test_parsed_conditions_keyword_concats_known_fields() -> None:

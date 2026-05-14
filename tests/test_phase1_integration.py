@@ -28,7 +28,12 @@ from app.main import app
 
 
 def _reset_state() -> None:
-    """Truncate history/cache and ensure only naver is enabled."""
+    """Truncate history/cache and ensure only naver is enabled.
+
+    Naver was retired from BUILTIN_SLUGS / DEFAULT_SHOPS at the user's
+    request but the adapter module is still around and the Phase 1 IT
+    exercises it. So we recreate the row explicitly in the fixture.
+    """
     with Session(engine) as session:
         for row in session.exec(select(ClickLog)).all():
             session.delete(row)
@@ -36,6 +41,16 @@ def _reset_state() -> None:
             session.delete(row)
         for row in session.exec(select(SearchResultsCache)).all():
             session.delete(row)
+        naver = session.exec(select(Shop).where(Shop.slug == "naver")).first()
+        if naver is None:
+            session.add(
+                Shop(
+                    slug="naver",
+                    name="네이버 쇼핑",
+                    adapter_module="app.adapters.naver:NaverAdapter",
+                    enabled=True,
+                )
+            )
         for shop in session.exec(select(Shop)).all():
             shop.enabled = shop.slug == "naver"
             session.add(shop)

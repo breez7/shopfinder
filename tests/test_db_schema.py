@@ -24,12 +24,12 @@ def session(tmp_path: Path) -> Session:
         yield s
 
 
-def test_seed_inserts_five_default_shops(session: Session) -> None:
+def test_seed_inserts_default_shops(session: Session) -> None:
     seed_defaults(session)
 
     slugs = set(session.exec(select(Shop.slug)).all())
-    assert slugs == {"naver", "coupang", "eleventh", "gmarket", "musinsa"}
-    assert len(DEFAULT_SHOPS) == 5
+    assert slugs == {"eleventh", "gmarket", "musinsa"}
+    assert len(DEFAULT_SHOPS) == 3
 
 
 def test_seed_is_idempotent(session: Session) -> None:
@@ -38,21 +38,15 @@ def test_seed_is_idempotent(session: Session) -> None:
     seed_defaults(session)
 
     shops = session.exec(select(Shop)).all()
-    assert len(shops) == 5
+    assert len(shops) == 3
     versions = session.exec(select(SchemaVersion)).all()
     assert [v.version for v in versions] == [CURRENT_SCHEMA_VERSION]
 
 
-def test_all_five_enabled_by_default(session: Session) -> None:
+def test_default_shops_enabled_by_default(session: Session) -> None:
     seed_defaults(session)
     enabled = session.exec(select(Shop).where(Shop.enabled == True)).all()  # noqa: E712
-    assert sorted(s.slug for s in enabled) == [
-        "coupang",
-        "eleventh",
-        "gmarket",
-        "musinsa",
-        "naver",
-    ]
+    assert sorted(s.slug for s in enabled) == ["eleventh", "gmarket", "musinsa"]
 
 
 def test_settings_crud(session: Session) -> None:

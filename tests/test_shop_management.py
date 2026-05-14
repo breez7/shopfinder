@@ -116,15 +116,15 @@ def test_add_yaml_shop_rejects_duplicate_slug() -> None:
 def test_toggle_enabled() -> None:
     _clean_custom_shops()
     with Session(engine) as session:
-        toggle_enabled(session, "naver", False)
-        shop = next(s for s in session.exec(select(Shop)).all() if s.slug == "naver")
+        toggle_enabled(session, "musinsa", False)
+        shop = next(s for s in session.exec(select(Shop)).all() if s.slug == "musinsa")
         assert shop.enabled is False
 
 
 def test_delete_shop_refuses_built_in() -> None:
     _clean_custom_shops()
     with Session(engine) as session:
-        ok, err = delete_shop(session, "naver")
+        ok, err = delete_shop(session, "musinsa")
         assert ok is False
         assert "built-in" in (err or "")
 
@@ -217,16 +217,16 @@ def test_admin_shops_add_surfaces_validation_errors() -> None:
 def test_admin_shops_toggle_endpoint_flips_state() -> None:
     _clean_custom_shops()
     with TestClient(app) as client:
-        r = client.post("/admin/shops/naver/toggle")
+        r = client.post("/admin/shops/musinsa/toggle")
         assert r.status_code == 200
     with Session(engine) as session:
-        shop = next(s for s in session.exec(select(Shop)).all() if s.slug == "naver")
+        shop = next(s for s in session.exec(select(Shop)).all() if s.slug == "musinsa")
         assert shop.enabled is False  # we started enabled, flipped once
 
 
 def test_admin_shops_delete_built_in_returns_400() -> None:
     with TestClient(app) as client:
-        r = client.post("/admin/shops/naver/delete")
+        r = client.post("/admin/shops/musinsa/delete")
         assert r.status_code == 400
 
 

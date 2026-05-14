@@ -13,8 +13,19 @@
     const sortMode = document.getElementById('sort-mode');
     const maxPriceFilter = document.getElementById('max-price-filter');
     const shopToggles = document.getElementById('shop-toggles');
+    const loadingBanner = document.getElementById('loading-banner');
+    const loadingPhase = document.getElementById('loading-phase');
+    const loadingCancel = document.getElementById('loading-cancel');
 
     if (!form) return;
+
+    function showLoading(phase) {
+        if (!loadingBanner) return;
+        if (phase && loadingPhase) loadingPhase.textContent = phase;
+        loadingBanner.hidden = false;
+    }
+    function hideLoading() { if (loadingBanner) loadingBanner.hidden = true; }
+    function setPhase(text) { if (loadingPhase) loadingPhase.textContent = text; }
 
     const shopsSeen = new Set();
     const disabledShops = new Set();
@@ -165,6 +176,7 @@
         shopsSeen.clear();
         disabledShops.clear();
         resultCount.textContent = '0';
+        showLoading('조건 파싱 중…');
         const es = new EventSource(path('/search/stream') + '?' + qs);
         currentSource = es;
         currentHistoryId = null;
@@ -200,8 +212,8 @@
                 applyFiltersAndSort();
             } catch (_) {}
         });
-        es.addEventListener('done', () => { es.close(); currentSource = null; });
-        es.onerror = () => { es.close(); currentSource = null; };
+        es.addEventListener('done', () => { es.close(); currentSource = null; hideLoading(); });
+        es.onerror = () => { es.close(); currentSource = null; hideLoading(); };
     }
 
     function startSearch(q, forceRefresh) {
@@ -212,7 +224,8 @@
         shopsSeen.clear();
         disabledShops.clear();
         resultCount.textContent = '0';
-        if (!q.trim()) return;
+        if (!q.trim()) { hideLoading(); return; }
+        showLoading('조건 파싱 중…');
 
         let url = path('/search/stream') + '?q=' + encodeURIComponent(q);
         if (forceRefresh) url += '&refresh=1';
@@ -224,16 +237,19 @@
         es.addEventListener('meta', e => {
             try {
                 const data = JSON.parse(e.data);
-                // First meta is a "started" ack with no history_id yet; the
-                // second one (after the LLM parse) carries history_id + parsed_by.
+                if (data.status === 'started') {
+                    setPhase('조건 파싱 중…');
+                }
                 if (typeof data.history_id !== 'undefined') {
                     currentHistoryId = data.history_id;
+                    setPhase(data.from_cache ? '캐시된 결과 불러오는 중…' : '쇼핑몰 검색 중…');
                 }
             } catch (_) { /* ignore */ }
         });
         es.addEventListener('shop_started', e => {
             const data = JSON.parse(e.data);
             resetStatusForSlug(data.slug, 'shop_started');
+            setPhase('쇼핑몰 검색 중…');
         });
         es.addEventListener('shop_completed', e => {
             const data = JSON.parse(e.data);
@@ -252,6 +268,7 @@
                 ensureShopToggle(lastCard.dataset.shop);
             }
             applyFiltersAndSort();
+            setPhase('결과 ' + count + '개 도착 — 계속 진행 중…');
         });
         es.addEventListener('score_update', e => {
             try {
@@ -275,11 +292,21 @@
         es.addEventListener('done', () => {
             es.close();
             currentSource = null;
+            hideLoading();
         });
         es.onerror = () => {
             es.close();
             currentSource = null;
+            hideLoading();
         };
+    }
+
+    if (loadingCancel) {
+        loadingCancel.addEventListener('click', () => {
+            if (currentSource) currentSource.close();
+            currentSource = null;
+            hideLoading();
+        });
     }
 
     form.addEventListener('submit', function (ev) {

@@ -132,15 +132,17 @@ async def test_naver_500_records_http_error_warning(monkeypatch: pytest.MonkeyPa
 
 
 def test_index_shows_banner_when_warnings_present() -> None:
+    # Banner UI was retired at the user's request; the warnings are still
+    # logged into the DB and visible at /admin/warnings, but the index
+    # page no longer surfaces them. Test now just asserts the index loads.
     _truncate_warnings()
     with Session(engine) as session:
-        session.add(AdapterWarning(shop_slug="naver", kind=KIND_HTTP_ERROR, message="m"))
+        session.add(AdapterWarning(shop_slug="eleventh", kind=KIND_HTTP_ERROR, message="m"))
         session.commit()
     with TestClient(app) as client:
         r = client.get("/")
         assert r.status_code == 200
-        assert "어댑터 경고" in r.text
-        assert "/admin/warnings" in r.text
+        assert "어댑터 경고" not in r.text  # banner removed
 
 
 def test_admin_warnings_page() -> None:

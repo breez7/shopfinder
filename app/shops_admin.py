@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 from app.adapters.yaml_adapter import validate_yaml_adapter_config
 from app.db.models import Shop
 
-BUILTIN_SLUGS = ("naver", "coupang", "eleventh", "gmarket", "musinsa")
+BUILTIN_SLUGS = ("eleventh", "gmarket", "musinsa")
 YAML_ADAPTER_MODULE = "app.adapters.yaml_adapter:YamlHtmlAdapter"
 
 

@@ -173,16 +173,11 @@ def create_app() -> FastAPI:
         return response
 
     @app.get("/", response_class=HTMLResponse)
-    def index(
-        request: Request,
-        q: str = "",
-        session: Session = Depends(get_session),
-    ) -> HTMLResponse:
-        warnings = recent_unresolved(session)
+    def index(request: Request, q: str = "") -> HTMLResponse:
         return templates.TemplateResponse(
             request,
             "index.html",
-            {"initial_query": q, "warnings": warnings},
+            {"initial_query": q},
         )
 
     @app.post("/parse", response_class=HTMLResponse)

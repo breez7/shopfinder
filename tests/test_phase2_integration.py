@@ -49,7 +49,16 @@ LLM_BASE = "https://llm.example/v1"
 
 
 def _reset_state() -> None:
+    """Recreate the 5-shop fan-out scenario the Phase 2 IT was written
+    against, even though naver + coupang were retired from the default
+    seed at the user's request."""
     from app.shops_admin import BUILTIN_SLUGS
+
+    LEGACY_SHOPS = [
+        ("naver", "네이버 쇼핑", "app.adapters.naver:NaverAdapter"),
+        ("coupang", "쿠팡", "app.adapters.coupang:CoupangAdapter"),
+    ]
+    KEEP = set(BUILTIN_SLUGS) | {s[0] for s in LEGACY_SHOPS}
 
     with Session(engine) as session:
         for tbl in (
@@ -58,11 +67,22 @@ def _reset_state() -> None:
             for row in session.exec(select(tbl)).all():
                 session.delete(row)
         for shop in session.exec(select(Shop)).all():
-            if shop.slug not in BUILTIN_SLUGS:
+            if shop.slug not in KEEP:
                 session.delete(shop)
-            else:
-                shop.enabled = True
-                session.add(shop)
+        existing = {s.slug for s in session.exec(select(Shop)).all()}
+        for slug, name, module in LEGACY_SHOPS:
+            if slug not in existing:
+                session.add(
+                    Shop(
+                        slug=slug,
+                        name=name,
+                        adapter_module=module,
+                        enabled=True,
+                    )
+                )
+        for shop in session.exec(select(Shop)).all():
+            shop.enabled = True
+            session.add(shop)
         session.commit()
 
 

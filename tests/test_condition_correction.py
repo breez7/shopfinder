@@ -16,6 +16,15 @@ from app.main import app
 
 def _enable_only_naver() -> None:
     with Session(engine) as session:
+        if not session.exec(select(Shop).where(Shop.slug == "naver")).first():
+            session.add(
+                Shop(
+                    slug="naver",
+                    name="네이버 쇼핑",
+                    adapter_module="app.adapters.naver:NaverAdapter",
+                    enabled=True,
+                )
+            )
         for s in session.exec(select(Shop)).all():
             s.enabled = s.slug == "naver"
             session.add(s)
