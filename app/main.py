@@ -14,6 +14,19 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.adapters.registry import load_enabled_adapters
 from app.adapters.types import ParsedConditions, SearchResult
+from app.auth import (
+    COOKIE_NAME,
+    OPEN_PATHS,
+    SESSION_MAX_AGE_SECONDS,
+    auth_enabled,
+    check_password,
+    make_session_token,
+    rate_limit_clear,
+    rate_limit_is_locked,
+    rate_limit_record_attempt,
+    set_password as auth_set_password,
+    validate_session,
+)
 from app.cache import conditions_hash as compute_conditions_hash
 from app.cache import load as load_cached
 from app.cache import store as store_cached
@@ -83,9 +96,67 @@ def create_app() -> FastAPI:
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+    @app.middleware("http")
+    async def password_gate(request: Request, call_next):
+        if not auth_enabled():
+            return await call_next(request)
+        path = request.url.path
+        if any(path == p or path.startswith(p) for p in OPEN_PATHS):
+            return await call_next(request)
+        token = request.cookies.get(COOKIE_NAME)
+        if validate_session(token):
+            return await call_next(request)
+        # Redirect to /login (HTML), or 401 for API-ish endpoints
+        if request.headers.get("accept", "").startswith("text/event-stream"):
+            from fastapi.responses import Response as _Resp
+            return _Resp(status_code=401)
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/login", status_code=303)
+
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/login", response_class=HTMLResponse)
+    def login_page(request: Request, error: str = "") -> HTMLResponse:
+        return templates.TemplateResponse(request, "login.html", {"error": error})
+
+    @app.post("/login")
+    def login_submit(request: Request, password: str = Form(...)):
+        ip = request.client.host if request.client else "unknown"
+        if rate_limit_is_locked(ip):
+            return templates.TemplateResponse(
+                request,
+                "login.html",
+                {"error": "너무 많은 실패 시도. 1분 후 다시 시도하세요."},
+                status_code=429,
+            )
+        if not check_password(password):
+            rate_limit_record_attempt(ip)
+            return templates.TemplateResponse(
+                request,
+                "login.html",
+                {"error": "비밀번호가 올바르지 않습니다."},
+                status_code=401,
+            )
+        rate_limit_clear(ip)
+        from fastapi.responses import RedirectResponse
+        response = RedirectResponse(url="/", status_code=303)
+        response.set_cookie(
+            COOKIE_NAME,
+            make_session_token(),
+            max_age=SESSION_MAX_AGE_SECONDS,
+            httponly=True,
+            samesite="lax",
+        )
+        return response
+
+    @app.post("/logout")
+    def logout():
+        from fastapi.responses import RedirectResponse
+        response = RedirectResponse(url="/login", status_code=303)
+        response.delete_cookie(COOKIE_NAME)
+        return response
 
     @app.get("/", response_class=HTMLResponse)
     def index(
@@ -319,6 +390,7 @@ def create_app() -> FastAPI:
     def settings_page(request: Request, session: Session = Depends(get_session)) -> HTMLResponse:
         api_key = settings_get(session, KEY_LLM_API_KEY)
         naver_secret = settings_get(session, KEY_NAVER_CLIENT_SECRET)
+        from app.auth import KEY_ACCESS_PASSWORD as _PW_KEY
         return templates.TemplateResponse(
             request,
             "settings.html",
@@ -329,6 +401,7 @@ def create_app() -> FastAPI:
                 "llm_call_cap": settings_get(session, KEY_LLM_CALL_CAP, "0"),
                 "naver_client_id": settings_get(session, KEY_NAVER_CLIENT_ID),
                 "naver_secret_masked": settings_mask(naver_secret),
+                "access_password_masked": settings_mask(settings_get(session, _PW_KEY)),
             },
         )
 
@@ -340,17 +413,19 @@ def create_app() -> FastAPI:
         llm_call_cap: str = Form(default="0"),
         naver_client_id: str = Form(default=""),
         naver_client_secret: str = Form(default=""),
+        access_password: str = Form(default=""),
         session: Session = Depends(get_session),
     ) -> HTMLResponse:
         settings_set(session, KEY_LLM_BASE_URL, llm_base_url.strip())
         settings_set(session, KEY_LLM_MODEL, llm_model.strip())
         settings_set(session, KEY_LLM_CALL_CAP, llm_call_cap.strip() or "0")
         settings_set(session, KEY_NAVER_CLIENT_ID, naver_client_id.strip())
-        # API key + Naver secret: empty input means "leave existing value alone"
         if llm_api_key.strip():
             settings_set(session, KEY_LLM_API_KEY, llm_api_key.strip())
         if naver_client_secret.strip():
             settings_set(session, KEY_NAVER_CLIENT_SECRET, naver_client_secret.strip())
+        if access_password.strip():
+            auth_set_password(access_password.strip())
         return HTMLResponse("<span style='color:#2ea44f'>저장됨</span>")
 
     @app.post("/settings/llm-test", response_class=HTMLResponse)

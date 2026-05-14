@@ -34,6 +34,14 @@
             </label>
         </fieldset>
 
+        <fieldset>
+            <legend>외부 노출 보호</legend>
+            <label>접근 비밀번호 (비우면 무인증)
+                <input type="text" name="access_password" value="" placeholder="{{ access_password_masked or '(미설정)' }}">
+                <small class="hint muted-small">비밀번호를 설정하면 /healthz와 /login을 제외한 모든 페이지가 잠깁니다. 비워두면 기존 값 유지.</small>
+            </label>
+        </fieldset>
+
         <div class="settings-actions">
             <button type="submit">저장</button>
             <button type="button" hx-post="/settings/llm-test" hx-target="#llm-test-msg" hx-swap="innerHTML">연결 테스트</button>
