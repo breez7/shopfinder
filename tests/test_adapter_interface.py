@@ -77,13 +77,16 @@ def test_load_class_resolves_module_path() -> None:
     assert cls is FakeAdapter
 
 
-def test_load_enabled_adapters_skips_missing_modules(session: Session) -> None:
+def test_load_enabled_adapters_returns_all_five_built_in_shops(session: Session) -> None:
     seed_defaults(session)
-    # Default seed has naver enabled (its module exists from #6) and 4 disabled
-    # entries pointing at modules that don't exist yet (#11~#14). With
-    # skip_missing=True the registry returns only the loadable ones.
     adapters = load_enabled_adapters(session)
-    assert [a.slug for a in adapters] == ["naver"]
+    assert sorted(a.slug for a in adapters) == [
+        "coupang",
+        "eleventh",
+        "gmarket",
+        "musinsa",
+        "naver",
+    ]
 
 
 def test_load_enabled_adapters_loads_present_modules(session: Session) -> None:
@@ -100,7 +103,7 @@ def test_load_enabled_adapters_loads_present_modules(session: Session) -> None:
 
     adapters = load_enabled_adapters(session)
     slugs = sorted(a.slug for a in adapters)
-    assert slugs == ["fake", "naver"]
+    assert slugs == ["coupang", "eleventh", "fake", "gmarket", "musinsa", "naver"]
 
 
 def test_parsed_conditions_keyword_concats_known_fields() -> None:

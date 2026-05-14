@@ -43,10 +43,16 @@ def test_seed_is_idempotent(session: Session) -> None:
     assert [v.version for v in versions] == [CURRENT_SCHEMA_VERSION]
 
 
-def test_only_naver_enabled_by_default(session: Session) -> None:
+def test_all_five_enabled_by_default(session: Session) -> None:
     seed_defaults(session)
     enabled = session.exec(select(Shop).where(Shop.enabled == True)).all()  # noqa: E712
-    assert [s.slug for s in enabled] == ["naver"]
+    assert sorted(s.slug for s in enabled) == [
+        "coupang",
+        "eleventh",
+        "gmarket",
+        "musinsa",
+        "naver",
+    ]
 
 
 def test_settings_crud(session: Session) -> None:

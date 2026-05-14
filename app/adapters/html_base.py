@@ -1,0 +1,206 @@
+"""Generic HTML-parsing adapter base.
+
+Subclasses declare a search URL template and CSS selectors; the base handles
+HTTP fetch (httpx + realistic User-Agent + random jitter), parsing
+(selectolax), max_price filtering, warning logging, and bot-detection
+heuristics.
+"""
+from __future__ import annotations
+
+import asyncio
+import random
+import re
+from collections.abc import AsyncIterator
+from typing import Optional
+from urllib.parse import quote_plus
+
+import httpx
+from selectolax.parser import HTMLParser, Node
+
+from app.adapters.base import ShopAdapter
+from app.adapters.types import ParsedConditions, SearchResult
+from app.warnings import (
+    KIND_BOT_DETECTION,
+    KIND_HTTP_ERROR,
+    KIND_PARSE_EXCEPTION,
+    KIND_ZERO_RESULTS,
+    record_warning,
+)
+
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
+DEFAULT_TIMEOUT_S = 8.0
+_PRICE_RE = re.compile(r"[0-9][\d,]*")
+
+
+def _to_int_price(raw: Optional[str]) -> Optional[int]:
+    if not raw:
+        return None
+    m = _PRICE_RE.search(raw)
+    if not m:
+        return None
+    try:
+        return int(m.group(0).replace(",", ""))
+    except ValueError:
+        return None
+
+
+def _text(node: Optional[Node]) -> str:
+    return (node.text(strip=True) if node is not None else "") or ""
+
+
+def _attr(node: Optional[Node], name: str) -> str:
+    if node is None:
+        return ""
+    val = node.attributes.get(name)
+    return val or ""
+
+
+class HtmlSearchAdapter(ShopAdapter):
+    """Subclasses override the class-level fields below."""
+
+    search_url_template: str = ""  # e.g. "https://example.com/search?q={keyword}"
+    card_selector: str = ""
+    title_selector: str = ""
+    price_selector: str = ""
+    link_selector: str = ""
+    image_selector: str = ""
+    specs_selector: str = ""
+
+    # If a response body contains any of these substrings we assume bot detection
+    bot_signatures: tuple[str, ...] = (
+        "captcha",
+        "Are you a human",
+        "비정상적인 접근",
+        "차단되었습니다",
+    )
+
+    min_delay_s: float = 0.5
+    max_delay_s: float = 1.5
+
+    def _build_url(self, conditions: ParsedConditions) -> str:
+        keyword = conditions.keyword().strip() or "상품"
+        return self.search_url_template.format(keyword=quote_plus(keyword))
+
+    def _absolutize(self, href: str) -> str:
+        if not href:
+            return ""
+        if href.startswith("//"):
+            return "https:" + href
+        return href
+
+    async def _fetch(self, url: str) -> Optional[httpx.Response]:
+        await asyncio.sleep(random.uniform(self.min_delay_s, self.max_delay_s))
+        headers = {
+            "User-Agent": DEFAULT_USER_AGENT,
+            "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+            "Accept": "text/html,application/xhtml+xml",
+        }
+        async with self._lock:
+            try:
+                async with httpx.AsyncClient(
+                    timeout=DEFAULT_TIMEOUT_S, follow_redirects=True
+                ) as client:
+                    return await client.get(url, headers=headers)
+            except httpx.HTTPError as exc:
+                record_warning(self.slug, KIND_HTTP_ERROR, f"{type(exc).__name__}: {exc}")
+                return None
+
+    def _is_bot_challenge(self, body: str) -> bool:
+        lowered = body[:2000].lower()
+        for sig in self.bot_signatures:
+            if sig.lower() in lowered:
+                return True
+        return False
+
+    def _parse_one_card(self, card: Node) -> Optional[SearchResult]:
+        try:
+            title_node = card.css_first(self.title_selector) if self.title_selector else None
+            price_node = card.css_first(self.price_selector) if self.price_selector else None
+            link_node = card.css_first(self.link_selector) if self.link_selector else None
+            image_node = card.css_first(self.image_selector) if self.image_selector else None
+            specs_node = card.css_first(self.specs_selector) if self.specs_selector else None
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"selector raise: {exc}") from exc
+
+        title = _text(title_node) or _attr(title_node, "title")
+        price = _to_int_price(_text(price_node))
+        url = self._absolutize(_attr(link_node, "href"))
+        image = self._absolutize(_attr(image_node, "src") or _attr(image_node, "data-src"))
+        specs = _text(specs_node)
+
+        if not title or not url:
+            return None
+        return SearchResult(
+            shop_slug=self.slug,
+            title=title,
+            price=price,
+            image_url=image or None,
+            product_url=url,
+            raw_specs=specs,
+        )
+
+    async def search(
+        self,
+        conditions: ParsedConditions,
+        max_results: int = 30,
+    ) -> AsyncIterator[SearchResult]:
+        if not self.search_url_template or not self.card_selector:
+            yield SearchResult.make_error(self.slug, "adapter not configured")
+            return
+
+        url = self._build_url(conditions)
+        response = await self._fetch(url)
+        if response is None:
+            yield SearchResult.make_error(self.slug, "HTTP error (see warnings)")
+            return
+        if response.status_code != 200:
+            msg = f"HTTP {response.status_code}"
+            record_warning(self.slug, KIND_HTTP_ERROR, msg)
+            yield SearchResult.make_error(self.slug, msg)
+            return
+
+        body = response.text
+        if self._is_bot_challenge(body):
+            record_warning(
+                self.slug,
+                KIND_BOT_DETECTION,
+                "challenge page detected",
+                snippet=body[:300],
+            )
+            yield SearchResult.make_error(self.slug, "bot challenge page")
+            return
+
+        try:
+            tree = HTMLParser(body)
+            cards = tree.css(self.card_selector)
+        except Exception as exc:  # noqa: BLE001
+            record_warning(self.slug, KIND_PARSE_EXCEPTION, str(exc))
+            yield SearchResult.make_error(self.slug, f"parse error: {exc}")
+            return
+
+        if not cards:
+            record_warning(
+                self.slug,
+                KIND_ZERO_RESULTS,
+                f"no cards matched selector {self.card_selector!r}",
+            )
+
+        yielded = 0
+        max_price = conditions.max_price
+        for card in cards:
+            if yielded >= max_results:
+                break
+            try:
+                result = self._parse_one_card(card)
+            except Exception as exc:  # noqa: BLE001
+                record_warning(self.slug, KIND_PARSE_EXCEPTION, str(exc))
+                continue
+            if result is None:
+                continue
+            if max_price is not None and result.price is not None and result.price > max_price:
+                continue
+            yielded += 1
+            yield result
