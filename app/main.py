@@ -14,6 +14,9 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.adapters.registry import load_enabled_adapters
 from app.adapters.types import ParsedConditions, SearchResult
+from app.cache import conditions_hash as compute_conditions_hash
+from app.cache import load as load_cached
+from app.cache import store as store_cached
 from app.db.models import ClickLog, SearchHistory
 from app.db.session import engine, get_session, init_db
 from app.llm.client import connection_test as llm_connection_test
@@ -99,9 +102,16 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/search/stream")
-    async def search_stream(request: Request, q: str = ""):
+    async def search_stream(request: Request, q: str = "", refresh: int = 0):
         # Try LLM parser first; it falls back to regex on any failure.
         conditions, parsed_by = await parse_with_llm(q)
+        cache_hit = False
+        cached_results: list[SearchResult] = []
+        if q.strip() and refresh != 1:
+            hit = load_cached(compute_conditions_hash(conditions))
+            if hit is not None:
+                cache_hit = True
+                cached_results = hit
 
         # Persist search_history row up front so click logs can reference it.
         history_row: SearchHistory | None = None
@@ -110,7 +120,7 @@ def create_app() -> FastAPI:
                 history_row = SearchHistory(
                     raw_query=q,
                     parsed_conditions_json=conditions.model_dump_json(),
-                    parsed_by=parsed_by,
+                    parsed_by=parsed_by + (" (cache)" if cache_hit else ""),
                 )
                 session.add(history_row)
                 session.commit()
@@ -121,12 +131,14 @@ def create_app() -> FastAPI:
         card_template = templates.get_template("partials/result_card.html")
 
         # LLM query optimizer (#17) — best-effort, no-op when LLM unconfigured.
+        # Skipped entirely on cache hit (don't burn LLM tokens for a replay).
         per_shop_keyword: dict[str, str] = {}
-        for a in adapters:
-            try:
-                per_shop_keyword[a.slug] = await optimize_keyword(conditions, a.slug)
-            except Exception:  # noqa: BLE001
-                per_shop_keyword[a.slug] = conditions.keyword()
+        if not cache_hit:
+            for a in adapters:
+                try:
+                    per_shop_keyword[a.slug] = await optimize_keyword(conditions, a.slug)
+                except Exception:  # noqa: BLE001
+                    per_shop_keyword[a.slug] = conditions.keyword()
 
         async def event_stream():
             t0 = time.monotonic()
@@ -138,10 +150,24 @@ def create_app() -> FastAPI:
                         {
                             "history_id": history_row.id if history_row else None,
                             "parsed_by": parsed_by,
+                            "from_cache": cache_hit,
                         },
                         ensure_ascii=False,
                     ),
                 }
+
+                if cache_hit:
+                    # Replay cached results without hitting adapters or LLM.
+                    collected = cached_results
+                    for r in cached_results:
+                        if await request.is_disconnected():
+                            break
+                        yield {
+                            "event": "result",
+                            "data": card_template.render(r=r),
+                        }
+                    yield {"event": "done", "data": ""}
+                    return
 
                 async for event in run_search(
                     conditions, adapters, per_shop_keyword=per_shop_keyword
@@ -180,6 +206,14 @@ def create_app() -> FastAPI:
                                         ensure_ascii=False,
                                     ),
                                 }
+                            # Cache for 24h (covers the scored payload so replay
+                            # surfaces score+reason without re-calling the LLM).
+                            try:
+                                store_cached(
+                                    compute_conditions_hash(conditions), collected
+                                )
+                            except Exception:  # noqa: BLE001
+                                pass
                         yield {"event": "done", "data": ""}
             finally:
                 if history_row is not None:

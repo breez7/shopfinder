@@ -49,14 +49,15 @@
         parsedPanel.innerHTML = await res.text();
     }
 
-    function startSearch(q) {
+    function startSearch(q, forceRefresh) {
         if (currentSource) currentSource.close();
         grid.innerHTML = '';
         shopStatus.innerHTML = '';
         resultCount.textContent = '0';
         if (!q.trim()) return;
 
-        const url = '/search/stream?q=' + encodeURIComponent(q);
+        let url = '/search/stream?q=' + encodeURIComponent(q);
+        if (forceRefresh) url += '&refresh=1';
         const es = new EventSource(url);
         currentSource = es;
         currentHistoryId = null;
@@ -117,8 +118,17 @@
         ev.preventDefault();
         const q = input.value.trim();
         refreshParsedPanel(q);
-        startSearch(q);
+        startSearch(q, false);
     });
+
+    const refreshBtn = document.getElementById('force-refresh');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function () {
+            const q = input.value.trim();
+            refreshParsedPanel(q);
+            startSearch(q, true);
+        });
+    }
 
     // Delegate click logging on result cards
     let _clickDebounce = new Map();
