@@ -32,6 +32,10 @@ services:
       # Parse still uses the LLM (one call, max 25s with regex fallback).
       LLM_DISABLE_OPTIMIZE: "1"
       LLM_DISABLE_SCORE: "1"
+      # Drop shop results whose title doesn't match the parsed conditions
+      # (color / category / fit / material / free-text tokens). Strict in
+      # production per user request "요청사항을 엄격하게 지켜줘".
+      STRICT_RESULT_FILTER: "1"
     # .env carries the LLM_BASE_URL / LLM_API_KEY / LLM_MODEL defaults
     # used when the /settings table is empty. Required when present.
     env_file:

@@ -31,6 +31,7 @@ from app.auth import (
 from app.cache import conditions_hash as compute_conditions_hash
 from app.cache import load as load_cached
 from app.cache import store as store_cached
+from app.result_filter import matches_conditions
 from app.db.models import ClickLog, SearchHistory
 from app.db.session import engine, get_session, init_db
 from app.llm.client import connection_test as llm_connection_test
@@ -331,6 +332,15 @@ def create_app() -> FastAPI:
                     if await request.is_disconnected():
                         break
                     if event.kind == "result" and event.result is not None:
+                        # Strict post-filter (opt-in via STRICT_RESULT_FILTER)
+                        # — drops items whose title doesn't actually match
+                        # the parsed conditions. Production compose sets
+                        # this to 1; tests leave it off so the canned mock
+                        # results still flow through.
+                        import os as _os
+                        if _os.getenv("STRICT_RESULT_FILTER", "0") in ("1", "true", "yes"):
+                            if not matches_conditions(event.result, conditions):
+                                continue
                         collected.append(event.result)
                         data = card_template.render(r=event.result)
                         yield {"event": "result", "data": data}
