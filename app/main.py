@@ -209,88 +209,110 @@ def create_app() -> FastAPI:
         free_text: str = "",
         use_edits: int = 0,
     ):
-        if use_edits == 1:
-            # Skip the parser entirely; user edited the conditions in the panel.
-            conditions = ParsedConditions(
-                category=category or None,
-                color=color or None,
-                size=size or None,
-                material=material or None,
-                material_pct=material_pct,
-                fit=fit or None,
-                max_price=max_price,
-                free_text=free_text,
-            )
-            parsed_by = "edited"
-        else:
-            # Try LLM parser first; it falls back to regex on any failure.
-            conditions, parsed_by = await parse_with_llm(q)
-        cache_hit = False
-        cached_results: list[SearchResult] = []
-        if q.strip() and refresh != 1:
-            hit = load_cached(compute_conditions_hash(conditions))
-            if hit is not None:
-                cache_hit = True
-                cached_results = hit
+        import asyncio as _asyncio
 
-        # Persist search_history row up front so click logs can reference it.
-        history_row: SearchHistory | None = None
-        if q.strip():
-            with Session(engine) as session:
-                history_row = SearchHistory(
-                    raw_query=q,
-                    parsed_conditions_json=conditions.model_dump_json(),
-                    parsed_by=parsed_by + (" (cache)" if cache_hit else ""),
-                )
-                session.add(history_row)
-                session.commit()
-                session.refresh(history_row)
-
-        with Session(engine) as session:
-            adapters = load_enabled_adapters(session)
         card_template = templates.get_template("partials/result_card.html")
-
-        # LLM query optimizer (#17) — best-effort, no-op when LLM unconfigured.
-        # Skipped entirely on cache hit (don't burn LLM tokens for a replay).
-        per_shop_keyword: dict[str, str] = {}
-        if not cache_hit:
-            for a in adapters:
-                try:
-                    per_shop_keyword[a.slug] = await optimize_keyword(conditions, a.slug)
-                except Exception:  # noqa: BLE001
-                    per_shop_keyword[a.slug] = conditions.keyword()
 
         async def event_stream():
             t0 = time.monotonic()
+
+            # ---- 1. Immediately let the client know the stream is alive.
+            # The LLM parse below may take ~10-25s; if we don't ack early
+            # the browser sees a frozen page and assumes the request died.
+            yield {
+                "event": "meta",
+                "data": json.dumps({"status": "started"}, ensure_ascii=False),
+            }
+
+            # ---- 2. Parse the query (LLM with regex fallback) ----------
+            if use_edits == 1:
+                conditions = ParsedConditions(
+                    category=category or None,
+                    color=color or None,
+                    size=size or None,
+                    material=material or None,
+                    material_pct=material_pct,
+                    fit=fit or None,
+                    max_price=max_price,
+                    free_text=free_text,
+                )
+                parsed_by = "edited"
+            else:
+                conditions, parsed_by = await parse_with_llm(q)
+
+            # Cache lookup
+            cache_hit = False
+            cached_results: list[SearchResult] = []
+            if q.strip() and refresh != 1:
+                hit = load_cached(compute_conditions_hash(conditions))
+                if hit is not None:
+                    cache_hit = True
+                    cached_results = hit
+
+            # Persist history row
+            history_row: SearchHistory | None = None
+            if q.strip():
+                with Session(engine) as session:
+                    history_row = SearchHistory(
+                        raw_query=q,
+                        parsed_conditions_json=conditions.model_dump_json(),
+                        parsed_by=parsed_by + (" (cache)" if cache_hit else ""),
+                    )
+                    session.add(history_row)
+                    session.commit()
+                    session.refresh(history_row)
+
+            with Session(engine) as session:
+                adapters = load_enabled_adapters(session)
+
+            # ---- 3. Second meta event with the resolved metadata.
+            yield {
+                "event": "meta",
+                "data": json.dumps(
+                    {
+                        "history_id": history_row.id if history_row else None,
+                        "parsed_by": parsed_by,
+                        "from_cache": cache_hit,
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+
+            # ---- 4. Cache-hit fast path: replay stored results -------
+            if cache_hit:
+                for r in cached_results:
+                    if await request.is_disconnected():
+                        return
+                    yield {"event": "result", "data": card_template.render(r=r)}
+                yield {"event": "done", "data": ""}
+                if history_row is not None:
+                    elapsed_ms = int((time.monotonic() - t0) * 1000)
+                    with Session(engine) as session:
+                        row = session.get(SearchHistory, history_row.id)
+                        if row is not None:
+                            row.total_results = len(cached_results)
+                            row.elapsed_ms = elapsed_ms
+                            session.add(row)
+                            session.commit()
+                return
+
+            # ---- 5. Query optimizer in parallel (off by default via env) ----
+            per_shop_keyword: dict[str, str] = {}
+            if adapters:
+                opt_results = await _asyncio.gather(
+                    *(optimize_keyword(conditions, a.slug) for a in adapters),
+                    return_exceptions=True,
+                )
+                for a, res in zip(adapters, opt_results):
+                    per_shop_keyword[a.slug] = (
+                        res if isinstance(res, str) and res else conditions.keyword()
+                    )
+
             collected: list[SearchResult] = []
             try:
-                yield {
-                    "event": "meta",
-                    "data": json.dumps(
-                        {
-                            "history_id": history_row.id if history_row else None,
-                            "parsed_by": parsed_by,
-                            "from_cache": cache_hit,
-                        },
-                        ensure_ascii=False,
-                    ),
-                }
-
-                if cache_hit:
-                    # Replay cached results without hitting adapters or LLM.
-                    collected = cached_results
-                    for r in cached_results:
-                        if await request.is_disconnected():
-                            break
-                        yield {
-                            "event": "result",
-                            "data": card_template.render(r=r),
-                        }
-                    yield {"event": "done", "data": ""}
-                    return
 
                 async for event in run_search(
-                    conditions, adapters, per_shop_keyword=per_shop_keyword
+                    conditions, adapters, per_shop_keyword=per_shop_keyword,
                 ):
                     if await request.is_disconnected():
                         break

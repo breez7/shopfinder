@@ -145,7 +145,10 @@ async def test_FR4_FR5_FR14_naver_stream_with_history_persistence(
                     if current_event == "meta":
                         saw_meta = True
                         payload = json.loads(data)
-                        history_id_from_stream = payload["history_id"]
+                        # The first meta is a "status: started" ack; the
+                        # second carries history_id + parsed_by + from_cache.
+                        if "history_id" in payload:
+                            history_id_from_stream = payload["history_id"]
                     elif current_event == "shop_started":
                         saw_shop_started = True
                     elif current_event == "result":

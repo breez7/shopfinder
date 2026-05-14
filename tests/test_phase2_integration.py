@@ -269,8 +269,8 @@ async def test_phase2_cache_hit_skips_adapters_and_llm(monkeypatch) -> None:
     assert events["done"]
     # Naver should NOT be called again
     assert respx.routes[0].call_count == first_naver_calls
-    # meta should mark from_cache=true
-    meta = json.loads(events["meta"][0])
+    # meta should mark from_cache=true (the last meta event has resolved metadata)
+    meta = json.loads(events["meta"][-1])
     assert meta["from_cache"] is True
 
 
@@ -286,7 +286,7 @@ async def test_phase2_force_refresh_bypasses_cache(monkeypatch) -> None:
     events = await _drain_sse(f"/search/stream?q={PRD_QUERY}&refresh=1")
     assert events["done"]
     assert respx.routes[0].call_count == n1 + 1
-    meta = json.loads(events["meta"][0])
+    meta = json.loads(events["meta"][-1])
     assert meta["from_cache"] is False
 
 

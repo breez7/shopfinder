@@ -79,15 +79,20 @@ async def parse_with_llm(query: str) -> tuple[ParsedConditions, str]:
     if not model:
         return regex_parse(query), "regex"
 
+    import asyncio as _asyncio
+
     try:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": f"Query: {query}\nJSON:"},
-            ],
-            temperature=0.0,
-            max_tokens=2000,
+        response = await _asyncio.wait_for(
+            client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "user", "content": f"Query: {query}\nJSON:"},
+                ],
+                temperature=0.0,
+                max_tokens=2000,
+            ),
+            timeout=25.0,
         )
     except Exception:  # noqa: BLE001
         return regex_parse(query), "regex"

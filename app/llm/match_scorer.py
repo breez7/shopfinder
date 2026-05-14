@@ -6,7 +6,9 @@ the SearchResult objects.
 """
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 import re
 from typing import Optional
 
@@ -73,6 +75,8 @@ async def score_batch(
     """
     if not results:
         return results
+    if os.getenv("LLM_DISABLE_SCORE", "0") in ("1", "true", "yes"):
+        return results
 
     client = build_client()
     if client is None:
@@ -90,14 +94,17 @@ async def score_batch(
         item_lines = "\n".join(_format_item(offset + i, r) for i, r in enumerate(batch))
         user = f"Conditions: {cond_json}\n\nItems:\n{item_lines}\n\nJSON array (one entry per item):"
         try:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    {"role": "user", "content": user},
-                ],
-                temperature=0.0,
-                max_tokens=120 * len(batch) + 2000,
+            response = await asyncio.wait_for(
+                client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": _SYSTEM_PROMPT},
+                        {"role": "user", "content": user},
+                    ],
+                    temperature=0.0,
+                    max_tokens=120 * len(batch) + 2000,
+                ),
+                timeout=45.0,
             )
             message = response.choices[0].message
             raw = message.content or ""

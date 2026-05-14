@@ -224,7 +224,11 @@
         es.addEventListener('meta', e => {
             try {
                 const data = JSON.parse(e.data);
-                currentHistoryId = data.history_id;
+                // First meta is a "started" ack with no history_id yet; the
+                // second one (after the LLM parse) carries history_id + parsed_by.
+                if (typeof data.history_id !== 'undefined') {
+                    currentHistoryId = data.history_id;
+                }
             } catch (_) { /* ignore */ }
         });
         es.addEventListener('shop_started', e => {

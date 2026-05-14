@@ -6,6 +6,9 @@ maximize recall on that shop's search UX. Returns the naive
 """
 from __future__ import annotations
 
+import asyncio
+import os
+
 from app.adapters.types import ParsedConditions
 from app.llm.client import build_client, get_llm_config
 
@@ -27,8 +30,14 @@ string — no quotes, no explanation, no markdown.
 
 
 async def optimize(conditions: ParsedConditions, shop_slug: str) -> str:
-    """Return a shop-specific keyword string. Falls back to conditions.keyword()."""
+    """Return a shop-specific keyword string. Falls back to conditions.keyword().
+
+    Disabled entirely when LLM_DISABLE_OPTIMIZE=1 — useful on slow/expensive
+    endpoints where the per-shop optimization isn't worth the latency cost.
+    """
     naive = conditions.keyword()
+    if os.getenv("LLM_DISABLE_OPTIMIZE", "0") in ("1", "true", "yes"):
+        return naive
     client = build_client()
     if client is None:
         return naive
@@ -47,14 +56,17 @@ async def optimize(conditions: ParsedConditions, shop_slug: str) -> str:
     )
 
     try:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": user},
-            ],
-            temperature=0.1,
-            max_tokens=600,
+        response = await asyncio.wait_for(
+            client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "user", "content": user},
+                ],
+                temperature=0.1,
+                max_tokens=600,
+            ),
+            timeout=15.0,
         )
         message = response.choices[0].message
         raw = (message.content or "").strip()

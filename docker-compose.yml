@@ -27,6 +27,11 @@ services:
       # survive bot-challenge pages and JS-only rendering. Naver uses an API
       # and is unaffected.
       FORCE_JS_ADAPTERS: "coupang,gmarket,eleventh,musinsa"
+      # LLM trade-offs on slow z.ai endpoints: skip per-shop keyword
+      # optimization and result scoring to keep first-byte latency low.
+      # Parse still uses the LLM (one call, max 25s with regex fallback).
+      LLM_DISABLE_OPTIMIZE: "1"
+      LLM_DISABLE_SCORE: "1"
     # .env carries the LLM_BASE_URL / LLM_API_KEY / LLM_MODEL defaults
     # used when the /settings table is empty. Required when present.
     env_file:
@@ -48,17 +53,16 @@ services:
       - "traefik.http.routers.shopfinder-insecure.entrypoints=web"
       - "traefik.http.routers.shopfinder-insecure.middlewares=shopfinder-redirect"
 
-      # StripPrefix so /shopfinder/foo -> /foo inside the container.
-      - "traefik.http.middlewares.shopfinder-strip.stripprefix.prefixes=/shopfinder"
-
-      # Main HTTPS router — no basicauth (per user request: do not prompt for
-      # a password). If we ever need to lock this down later, add the
-      # shopfinder-auth middleware back into the chain.
+      # NOTE: no StripPrefix. FastAPI is configured with
+      # SHOPFINDER_ROOT_PATH=/shopfinder, so it matches paths with the
+      # prefix included. Stripping the prefix at the proxy broke static
+      # file routing (StaticFiles is mounted at /static *inside* the app
+      # but the app's routing sees /shopfinder/static/... when root_path
+      # is set — Mount matching with root_path requires the full path).
       - "traefik.http.routers.shopfinder.rule=Host(`james777lee.duckdns.org`) && PathPrefix(`/shopfinder`)"
       - "traefik.http.routers.shopfinder.entrypoints=websecure"
       - "traefik.http.routers.shopfinder.tls=true"
       - "traefik.http.routers.shopfinder.tls.certresolver=tmhttpchallenge"
-      - "traefik.http.routers.shopfinder.middlewares=shopfinder-strip"
       - "traefik.http.routers.shopfinder.service=shopfinder"
 
 networks:
