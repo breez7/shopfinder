@@ -121,6 +121,28 @@ code {
     font-weight: 400;
 }
 
+/* Warning banner */
+.warning-banner {
+    background: #fff4dd;
+    color: #8a5a00;
+    border: 1px solid #f5d780;
+    padding: 0.55rem 0.85rem;
+    border-radius: 8px;
+    margin-bottom: 0.9rem;
+    font-size: 0.92rem;
+}
+.warning-banner a { color: #6b4500; font-weight: 600; }
+
+.warnings-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 0.75rem;
+}
+.warnings-table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; font-size: 0.92rem; }
+.warnings-table th, .warnings-table td { padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--border); text-align: left; }
+.warnings-table thead { background: #f0f2f5; }
+.btn-danger { background: #cf222e; color: #fff; border: none; padding: 0.4rem 0.75rem; border-radius: 6px; cursor: pointer; }
+.btn-small { background: #eef1f4; border: none; padding: 0.25rem 0.55rem; border-radius: 6px; cursor: pointer; }
+
 /* History page */
 .history-table {
     width: 100%;

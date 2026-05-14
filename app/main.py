@@ -18,6 +18,11 @@ from app.db.models import ClickLog, SearchHistory
 from app.db.session import engine, get_session, init_db
 from app.llm.regex_parser import parse as regex_parse
 from app.search import run_search
+from app.warnings import (
+    clear_all as warnings_clear_all,
+    dismiss as warnings_dismiss,
+    recent_unresolved,
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = BASE_DIR / "web" / "templates"
@@ -57,8 +62,17 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     @app.get("/", response_class=HTMLResponse)
-    def index(request: Request, q: str = "") -> HTMLResponse:
-        return templates.TemplateResponse(request, "index.html", {"initial_query": q})
+    def index(
+        request: Request,
+        q: str = "",
+        session: Session = Depends(get_session),
+    ) -> HTMLResponse:
+        warnings = recent_unresolved(session)
+        return templates.TemplateResponse(
+            request,
+            "index.html",
+            {"initial_query": q, "warnings": warnings},
+        )
 
     @app.post("/parse", response_class=HTMLResponse)
     def parse_query(request: Request, q: str = Form(default="")) -> HTMLResponse:
@@ -166,6 +180,24 @@ def create_app() -> FastAPI:
             "history.html",
             {"rows": rows},
         )
+
+    @app.get("/admin/warnings", response_class=HTMLResponse)
+    def admin_warnings(
+        request: Request,
+        session: Session = Depends(get_session),
+    ) -> HTMLResponse:
+        rows = recent_unresolved(session, days=30)
+        return templates.TemplateResponse(request, "admin/warnings.html", {"rows": rows})
+
+    @app.post("/admin/warnings/{warning_id}/dismiss")
+    def admin_dismiss(warning_id: int, session: Session = Depends(get_session)):
+        if not warnings_dismiss(session, warning_id):
+            raise HTTPException(status_code=404, detail="warning not found")
+        return JSONResponse({"ok": True})
+
+    @app.post("/admin/warnings/clear")
+    def admin_clear(session: Session = Depends(get_session)):
+        return JSONResponse({"ok": True, "deleted": warnings_clear_all(session)})
 
     return app
 

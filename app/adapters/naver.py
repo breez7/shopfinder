@@ -13,6 +13,7 @@ from app.adapters.base import ShopAdapter
 from app.adapters.types import ParsedConditions, SearchResult
 from app.db.models import Setting
 from app.db.session import engine
+from app.warnings import KIND_HTTP_ERROR, record_warning
 
 NAVER_SEARCH_URL = "https://openapi.naver.com/v1/search/shop.json"
 TIMEOUT_SECONDS = 8.0
@@ -77,16 +78,17 @@ class NaverAdapter(ShopAdapter):
                 return
 
             if response.status_code == 401:
+                record_warning(self.slug, KIND_HTTP_ERROR, "Naver auth failed (401)")
                 yield SearchResult.make_error(self.slug, "Naver auth failed (401)")
                 return
             if response.status_code == 429:
+                record_warning(self.slug, KIND_HTTP_ERROR, "Naver rate limited (429)")
                 yield SearchResult.make_error(self.slug, "Naver rate limited (429)")
                 return
             if response.status_code >= 400:
-                yield SearchResult.make_error(
-                    self.slug,
-                    f"Naver HTTP {response.status_code}: {response.text[:120]}",
-                )
+                msg = f"Naver HTTP {response.status_code}: {response.text[:120]}"
+                record_warning(self.slug, KIND_HTTP_ERROR, msg)
+                yield SearchResult.make_error(self.slug, msg)
                 return
 
             try:

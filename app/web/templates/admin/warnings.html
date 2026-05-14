@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}어댑터 경고 · ShopFinder{% endblock %}
+{% block content %}
+<section class="warnings">
+    <header class="warnings-header">
+        <h1>어댑터 경고</h1>
+        {% if rows %}
+        <form action="/admin/warnings/clear" method="post" hx-post="/admin/warnings/clear" hx-confirm="모든 경고를 삭제할까요?">
+            <button type="submit" class="btn-danger">전체 삭제</button>
+        </form>
+        {% endif %}
+    </header>
+    {% if not rows %}
+        <p class="hint">활성 경고가 없습니다.</p>
+    {% else %}
+        <table class="warnings-table">
+            <thead>
+                <tr>
+                    <th>시각</th>
+                    <th>쇼핑몰</th>
+                    <th>유형</th>
+                    <th>메시지</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for w in rows %}
+                <tr>
+                    <td><time>{{ w.raised_at.strftime("%Y-%m-%d %H:%M") }}</time></td>
+                    <td><code>{{ w.shop_slug }}</code></td>
+                    <td><code>{{ w.kind }}</code></td>
+                    <td>{{ w.message }}</td>
+                    <td>
+                        <button class="btn-small"
+                                hx-post="/admin/warnings/{{ w.id }}/dismiss"
+                                hx-target="closest tr"
+                                hx-swap="outerHTML">무시</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+</section>
+{% endblock %}

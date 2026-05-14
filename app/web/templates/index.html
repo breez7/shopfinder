@@ -1,5 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
+{% if warnings %}
+<div class="warning-banner">
+    어댑터 경고 {{ warnings|length }}건이 있습니다.
+    <a href="/admin/warnings">자세히 보기 →</a>
+</div>
+{% endif %}
 <section class="search">
     <form id="search-form">
         <label for="q" class="visually-hidden">검색어</label>
