@@ -11,8 +11,8 @@ class MusinsaAdapter(HtmlSearchAdapter):
 
     search_url_template = "https://www.musinsa.com/search/musinsa/goods?q={keyword}"
     card_selector = "li.li_box"
-    title_selector = ".list_info a"
+    title_selector = ".item_title"
     price_selector = ".price"
     link_selector = ".list_info a"
     image_selector = "img"
-    specs_selector = ".item_title"
+    specs_selector = ".article_info_brand"
