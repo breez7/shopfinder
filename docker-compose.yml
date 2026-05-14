@@ -48,20 +48,17 @@ services:
       - "traefik.http.routers.shopfinder-insecure.entrypoints=web"
       - "traefik.http.routers.shopfinder-insecure.middlewares=shopfinder-redirect"
 
-      # basicauth (reuse TeslaMate's .htpasswd, mounted into the proxy
-      # container as /auth/.htpasswd from the TeslaMate compose).
-      - "traefik.http.middlewares.shopfinder-auth.basicauth.realm=shopfinder"
-      - "traefik.http.middlewares.shopfinder-auth.basicauth.usersfile=/auth/.htpasswd"
-
       # StripPrefix so /shopfinder/foo -> /foo inside the container.
       - "traefik.http.middlewares.shopfinder-strip.stripprefix.prefixes=/shopfinder"
 
-      # Main HTTPS router
+      # Main HTTPS router — no basicauth (per user request: do not prompt for
+      # a password). If we ever need to lock this down later, add the
+      # shopfinder-auth middleware back into the chain.
       - "traefik.http.routers.shopfinder.rule=Host(`james777lee.duckdns.org`) && PathPrefix(`/shopfinder`)"
       - "traefik.http.routers.shopfinder.entrypoints=websecure"
       - "traefik.http.routers.shopfinder.tls=true"
       - "traefik.http.routers.shopfinder.tls.certresolver=tmhttpchallenge"
-      - "traefik.http.routers.shopfinder.middlewares=shopfinder-auth,shopfinder-strip"
+      - "traefik.http.routers.shopfinder.middlewares=shopfinder-strip"
       - "traefik.http.routers.shopfinder.service=shopfinder"
 
 networks:

@@ -166,7 +166,7 @@ def _mount_all_mocks(monkeypatch) -> None:
             200, text=(FIXTURES / "eleventh_sample.html").read_text(encoding="utf-8")
         )
     )
-    respx.get(url__regex=r"https?://browse\.gmarket\.co\.kr/.*").mock(
+    respx.get(url__regex=r"https?://m\.gmarket\.co\.kr/.*").mock(
         return_value=httpx.Response(
             200, text=(FIXTURES / "gmarket_sample.html").read_text(encoding="utf-8")
         )

@@ -157,7 +157,7 @@ async def test_html_adapter_zero_results_logged() -> None:
     [
         (CoupangAdapter, "coupang", "coupang.com/np/search"),
         (ElevenstAdapter, "eleventh", "search.11st.co.kr"),
-        (GmarketAdapter, "gmarket", "browse.gmarket.co.kr"),
+        (GmarketAdapter, "gmarket", "m.gmarket.co.kr"),
         (MusinsaAdapter, "musinsa", "musinsa.com/search"),
     ],
 )

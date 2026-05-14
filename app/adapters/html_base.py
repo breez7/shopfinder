@@ -83,6 +83,7 @@ class HtmlSearchAdapter(ShopAdapter):
     image_selector: str = ""
     specs_selector: str = ""
     requires_js: bool = False  # set true for sites that need Playwright rendering
+    mobile_emulation: bool = False  # mobile UA + viewport when Playwright fetches
 
     def __init__(self, config: dict | None = None) -> None:
         super().__init__(config=config)
@@ -147,7 +148,9 @@ class HtmlSearchAdapter(ShopAdapter):
             await asyncio.sleep(random.uniform(self.min_delay_s, self.max_delay_s))
             async with self._lock:
                 html = await fetch_rendered_html(
-                    url, wait_for_selector=self.card_selector or None
+                    url,
+                    wait_for_selector=self.card_selector or None,
+                    mobile=self.mobile_emulation,
                 )
             if html is None:
                 record_warning(
