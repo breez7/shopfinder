@@ -54,13 +54,15 @@ async def optimize(conditions: ParsedConditions, shop_slug: str) -> str:
                 {"role": "user", "content": user},
             ],
             temperature=0.1,
-            max_tokens=80,
+            max_tokens=600,
         )
-        raw = (response.choices[0].message.content or "").strip()
+        message = response.choices[0].message
+        raw = (message.content or "").strip()
+        if not raw:
+            raw = (getattr(message, "reasoning_content", "") or "").strip()
         if not raw:
             return naive
-        # Take just the first non-empty line, strip surrounding quotes
-        first_line = raw.splitlines()[0].strip()
+        first_line = raw.splitlines()[-1].strip()
         return first_line.strip("\"'") or naive
     except Exception:  # noqa: BLE001
         return naive

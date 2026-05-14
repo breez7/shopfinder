@@ -97,9 +97,12 @@ async def score_batch(
                     {"role": "user", "content": user},
                 ],
                 temperature=0.0,
-                max_tokens=80 * len(batch) + 200,
+                max_tokens=120 * len(batch) + 2000,
             )
-            raw = (response.choices[0].message.content or "")
+            message = response.choices[0].message
+            raw = message.content or ""
+            if not raw.strip():
+                raw = getattr(message, "reasoning_content", "") or ""
         except Exception:  # noqa: BLE001
             return
 

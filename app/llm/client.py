@@ -5,6 +5,7 @@ optimizer, #18/#19 scorer, and the #15 settings UI for the connection test.
 """
 from __future__ import annotations
 
+import os
 from typing import Optional
 
 import httpx
@@ -21,13 +22,13 @@ from app.settings_store import (
 
 
 def get_llm_config() -> tuple[str, str, str]:
-    """Return (base_url, api_key, model). Empty strings when unset."""
+    """Return (base_url, api_key, model). Settings table wins; falls back to
+    LLM_BASE_URL / LLM_API_KEY / LLM_MODEL env vars when a slot is empty."""
     with Session(engine) as session:
-        return (
-            settings_get(session, KEY_LLM_BASE_URL),
-            settings_get(session, KEY_LLM_API_KEY),
-            settings_get(session, KEY_LLM_MODEL),
-        )
+        base = settings_get(session, KEY_LLM_BASE_URL) or os.getenv("LLM_BASE_URL", "")
+        key = settings_get(session, KEY_LLM_API_KEY) or os.getenv("LLM_API_KEY", "")
+        model = settings_get(session, KEY_LLM_MODEL) or os.getenv("LLM_MODEL", "")
+    return base, key, model
 
 
 def build_client() -> Optional[AsyncOpenAI]:

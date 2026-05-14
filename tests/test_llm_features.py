@@ -128,10 +128,12 @@ async def test_query_optimizer_returns_llm_suggestion_when_configured() -> None:
 
 
 @respx.mock
-async def test_query_optimizer_strips_quotes_and_extra_lines() -> None:
+async def test_query_optimizer_takes_last_line_after_reasoning() -> None:
+    """Reasoning models often put thinking first and the final keyword at
+    the end. We take the last non-empty line and strip surrounding quotes."""
     _truncate_settings()
     _configure_llm()
-    _mock_chat_completion('"검정 셔츠"\nextra commentary')
+    _mock_chat_completion("thinking out loud...\n'검정 셔츠'")
     c = ParsedConditions(color="검정", category="셔츠")
     out = await optimize(c, "naver")
     assert out == "검정 셔츠"

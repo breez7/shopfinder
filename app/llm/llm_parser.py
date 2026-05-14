@@ -87,14 +87,19 @@ async def parse_with_llm(query: str) -> tuple[ParsedConditions, str]:
                 {"role": "user", "content": f"Query: {query}\nJSON:"},
             ],
             temperature=0.0,
-            max_tokens=400,
+            max_tokens=2000,
         )
     except Exception:  # noqa: BLE001
         return regex_parse(query), "regex"
 
     raw = ""
     try:
-        raw = response.choices[0].message.content or ""
+        message = response.choices[0].message
+        raw = message.content or ""
+        # Reasoning models (e.g. GLM-4.5/5) may put the JSON in
+        # reasoning_content when content ends up empty.
+        if not raw.strip():
+            raw = getattr(message, "reasoning_content", "") or ""
     except (AttributeError, IndexError):
         pass
 
