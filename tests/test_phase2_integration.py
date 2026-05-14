@@ -49,6 +49,8 @@ LLM_BASE = "https://llm.example/v1"
 
 
 def _reset_state() -> None:
+    from app.shops_admin import BUILTIN_SLUGS
+
     with Session(engine) as session:
         for tbl in (
             ClickLog, SearchHistory, SearchResultsCache, AdapterWarning, Setting
@@ -56,8 +58,11 @@ def _reset_state() -> None:
             for row in session.exec(select(tbl)).all():
                 session.delete(row)
         for shop in session.exec(select(Shop)).all():
-            shop.enabled = True
-            session.add(shop)
+            if shop.slug not in BUILTIN_SLUGS:
+                session.delete(shop)
+            else:
+                shop.enabled = True
+                session.add(shop)
         session.commit()
 
 
