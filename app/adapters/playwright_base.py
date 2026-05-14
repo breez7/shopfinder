@@ -29,12 +29,18 @@ def playwright_available() -> bool:
     return True
 
 
-async def fetch_rendered_html(url: str, timeout_ms: int = 8000) -> Optional[str]:
+async def fetch_rendered_html(
+    url: str,
+    timeout_ms: int = 20000,
+    wait_until: str = "domcontentloaded",
+    wait_for_selector: Optional[str] = None,
+    wait_selector_timeout_ms: int = 10000,
+) -> Optional[str]:
     """Render `url` in a headless browser and return the resolved HTML.
 
-    Returns None when Playwright is disabled or unavailable. The container's
-    memory budget is enforced by the caller (we abort if RSS climbs past
-    the 400 MB ceiling defined by the issue).
+    Returns None when Playwright is disabled or unavailable. When
+    `wait_for_selector` is given, blocks (with its own budget) until that
+    selector appears — handy for SPAs that hydrate after the initial DOM.
     """
     if not playwright_available():
         return None
@@ -55,7 +61,19 @@ async def fetch_rendered_html(url: str, timeout_ms: int = 8000) -> Optional[str]
                     ),
                 )
                 page = await context.new_page()
-                await page.goto(url, timeout=timeout_ms, wait_until="networkidle")
+                await page.goto(url, timeout=timeout_ms, wait_until=wait_until)
+                if wait_for_selector:
+                    try:
+                        await page.wait_for_selector(
+                            wait_for_selector, timeout=wait_selector_timeout_ms
+                        )
+                    except Exception:
+                        pass  # selector never appeared — return whatever we have
+                else:
+                    try:
+                        await page.wait_for_load_state("networkidle", timeout=4000)
+                    except Exception:
+                        pass
                 return await page.content()
             finally:
                 await browser.close()

@@ -8,6 +8,7 @@ heuristics.
 from __future__ import annotations
 
 import asyncio
+import os
 import random
 import re
 from collections.abc import AsyncIterator
@@ -63,6 +64,14 @@ def _attr(node: Optional[Node], name: str) -> str:
     return val or ""
 
 
+def _force_js_slugs() -> set[str]:
+    """Adapter slugs that should be routed through Playwright regardless of
+    their class-level `requires_js` flag. Read from the FORCE_JS_ADAPTERS env
+    var as a comma-separated list (e.g. "coupang,gmarket,eleventh,musinsa")."""
+    raw = os.getenv("FORCE_JS_ADAPTERS", "")
+    return {s.strip() for s in raw.split(",") if s.strip()}
+
+
 class HtmlSearchAdapter(ShopAdapter):
     """Subclasses override the class-level fields below."""
 
@@ -74,6 +83,13 @@ class HtmlSearchAdapter(ShopAdapter):
     image_selector: str = ""
     specs_selector: str = ""
     requires_js: bool = False  # set true for sites that need Playwright rendering
+
+    def __init__(self, config: dict | None = None) -> None:
+        super().__init__(config=config)
+        # Operator can force-enable Playwright for specific built-in adapters
+        # without touching their Python class.
+        if self.slug and self.slug in _force_js_slugs():
+            self.requires_js = True
 
     # If a response body contains any of these substrings we assume bot detection
     bot_signatures: tuple[str, ...] = (
@@ -130,7 +146,9 @@ class HtmlSearchAdapter(ShopAdapter):
                 return None, 0
             await asyncio.sleep(random.uniform(self.min_delay_s, self.max_delay_s))
             async with self._lock:
-                html = await fetch_rendered_html(url)
+                html = await fetch_rendered_html(
+                    url, wait_for_selector=self.card_selector or None
+                )
             if html is None:
                 record_warning(
                     self.slug, KIND_HTTP_ERROR, "Playwright fetch failed"

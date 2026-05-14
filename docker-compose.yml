@@ -2,8 +2,8 @@ services:
   app:
     build:
       context: .
-      dockerfile: docker/Dockerfile
-    image: shopfinder:latest
+      dockerfile: docker/Dockerfile.playwright
+    image: shopfinder:playwright
     container_name: shopfinder
     restart: unless-stopped
     # No host port mapping — Traefik handles ingress on the tesla network.
@@ -22,6 +22,11 @@ services:
       # template links all emit the prefix. Traefik StripPrefix below removes
       # the prefix before forwarding to this container.
       SHOPFINDER_ROOT_PATH: /shopfinder
+      ENABLE_PLAYWRIGHT: "1"
+      # Force the 4 HTML shop adapters through Playwright (Chromium) so they
+      # survive bot-challenge pages and JS-only rendering. Naver uses an API
+      # and is unaffected.
+      FORCE_JS_ADAPTERS: "coupang,gmarket,eleventh,musinsa"
     # .env carries the LLM_BASE_URL / LLM_API_KEY / LLM_MODEL defaults
     # used when the /settings table is empty. Required when present.
     env_file:
